@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2.8.4-alpine
+    container_name: modelfit-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+  db:
+    image: postgres:16-alpine
+    container_name: modelfit-db-prod
+    restart: always
+    environment:
+      POSTGRES_USER: modelfit
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: modelfit
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    # In production, Postgres port 5432 is NOT exposed to the host
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: modelfit-api-prod
+    restart: always
+    depends_on:
+      - db
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://modelfit:modelfit@db:5432/modelfit
+      LOG_LEVEL: INFO
+      CORS_ORIGINS: http://localhost:3000
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: modelfit-web-prod
+    restart: always
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data_prod:

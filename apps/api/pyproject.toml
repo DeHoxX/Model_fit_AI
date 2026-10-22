@@ -1,0 +1,83 @@
+[project]
+name = "modelfit"
+version = "1.0.0"
+description = "ModelFit: AI Model Discovery and Memory Estimation Platform API"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.11",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.8.1",
+    "uvicorn[standard]>=0.34.0",
+    "sqlalchemy[asyncio]>=2.0.38",
+    "greenlet>=3.1.1",
+    "asyncpg>=0.30.0",
+    "alembic>=1.15.1",
+    "structlog>=25.1.0",
+    "httpx>=0.28.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.25.3",
+    "pytest-cov>=6.0.0",
+    "respx>=0.22.0",
+    "hypothesis>=6.128.0",
+    "ruff>=0.9.10",
+    "mypy>=1.15.0",
+    "import-linter>=2.2",
+    "aiosqlite>=0.20.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.importlinter]
+root_package = "modelfit"
+
+[[tool.importlinter.contracts]]
+name = "Estimator must be pure"
+type = "forbidden"
+source_modules = ["modelfit.modules.estimator"]
+forbidden_modules = [
+    "fastapi",
+    "sqlalchemy",
+    "httpx",
+    "huggingface_hub",
+    "modelfit.modules.catalog",
+    "modelfit.modules.chat",
+    "modelfit.modules.configs",
+    "modelfit.modules.health",
+    "modelfit.modules.recommend",
+    "modelfit.modules.admin",
+]
+
+[[tool.importlinter.contracts]]
+name = "Services must not import routers"
+type = "forbidden"
+source_modules = [
+    "modelfit.modules.health.service",
+]
+forbidden_modules = [
+    "modelfit.modules.health.router",
+]

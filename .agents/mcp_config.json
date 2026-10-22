@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "claude-mem": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\chief\\.claude\\plugins\\marketplaces\\thedotmack\\plugin\\scripts\\mcp-server.cjs"
+      ],
+      "env": {
+        "CLAUDE_MEM_DATA_DIR": "C:\\Users\\chief\\.claude-mem"
+      }
+    },
+    "omniroute": {
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "omniroute",
+        "--mcp"
+      ],
+      "env": {
+        "OMNIROUTE_DATA_DIR": "C:\\Users\\chief\\.omniroute"
+      }
+    }
+  }
+}

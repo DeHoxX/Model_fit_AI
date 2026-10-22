@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: modelfit-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: modelfit
+      POSTGRES_PASSWORD: modelfit_dev_password
+      POSTGRES_DB: modelfit
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U modelfit"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: modelfit-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+asyncpg://modelfit:modelfit_dev_password@db:5432/modelfit
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    command: ["sh", "-c", "alembic upgrade head && uvicorn modelfit.main:app --host 0.0.0.0 --port 8000"]
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: modelfit-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:
