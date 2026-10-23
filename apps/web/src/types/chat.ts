@@ -1,24 +1,29 @@
-import { AIModelSpec } from './models';
-import { UserHardwareProfile, MemoryCalculationResult } from './hardware';
+import { components } from '@/api/schema';
+
+export type RecommendationCandidate = components['schemas']['RecommendationCandidate'];
+export type EstimationResult = components['schemas']['EstimationResult'];
+
+export interface ToolEvent {
+  name: string;
+  status: 'running' | 'completed';
+}
 
 export interface QuickReplyOption {
   id: string;
   label: string;
   actionValue: string;
-  category?: 'gpu' | 'goal' | 'preference' | 'action';
 }
 
 export interface ChatMessage {
   id: string;
-  sender: 'user' | 'assistant';
-  text: string;
+  role: 'user' | 'assistant';
+  content: string;
   timestamp: number;
+  toolEvents?: ToolEvent[];
+  recommendations?: RecommendationCandidate[];
+  isStreaming?: boolean;
+  error?: string;
   quickReplies?: QuickReplyOption[];
-  detectedHardware?: Partial<UserHardwareProfile>;
-  recommendationPreview?: {
-    model: AIModelSpec;
-    calcResult: MemoryCalculationResult;
-  };
 }
 
 export interface ChatConversation {
@@ -27,5 +32,5 @@ export interface ChatConversation {
   createdAt: number;
   updatedAt: number;
   messages: ChatMessage[];
-  hardwareProfile?: UserHardwareProfile;
+  hardwareProfile?: Record<string, unknown>;
 }

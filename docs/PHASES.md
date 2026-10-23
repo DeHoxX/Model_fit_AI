@@ -5,7 +5,7 @@
 | **Phase 1** | Project foundation and application structure | **Complete** | 2026-10-22 | `phase1-complete` |
 | **Phase 2** | Core memory estimation engine | **Complete** | 2026-10-22 | `phase2-complete` |
 | **Phase 3** | Hugging Face model discovery and metadata | **Complete** | 2026-10-22 | `phase3-complete` |
-| **Phase 4** | AI chatbot and natural-language recommendations | Not Started | - | `phase4-complete` |
+| **Phase 4** | AI chatbot and natural-language recommendations | **Complete** | 2026-10-23 | `phase4-complete` |
 | **Phase 5** | Persistence, administration, testing, and deployment | Not Started | - | `phase5-complete` |
 
 
@@ -150,4 +150,83 @@
    cd apps/web && npm run build
    ```
    *Result*: TypeScript clean (0 errors), Next.js 14.2.24 compiled production bundle with `/models` and dynamic `/models/[...repoId]`.
+
+---
+
+## Phase 4 Execution Summary (Checkpoint A: Backend)
+
+### Real Commands Run & Verified Outputs
+
+1. **Backend Integration & Unit Tests**:
+   ```bash
+   cd apps/api && uv run pytest -v
+   ```
+   *Result*: 68 passed in 24.41s.
+   - Grounded tool loop round cap: terminates at `MAX_TOOL_ROUNDS=5` and emits warning.
+   - Post-check verification: strips ungrounded/hallucinated model IDs not returned by tools.
+   - Malformed tool args: handled safely without exception, returning structured error status.
+   - Prompt injection resistance: system prompt instructions preserve single source of truth.
+   - Deterministic recommendation ranking, headroom curve, and candidate filtering verified.
+   - Clarification flow verified on missing requirements.
+   - SSE streaming and 4 req/min sliding-window rate limiter verified.
+
+2. **Code Quality & Type Safety**:
+   ```bash
+   cd apps/api && uv run ruff check .
+   cd apps/api && uv run lint-imports
+   cd apps/api && uv run mypy src tests
+   ```
+   *Result*:
+   - Ruff: All checks passed.
+   - Import Linter: Contracts: 2 kept, 0 broken (`Estimator must be pure KEPT`, `Services must not import routers KEPT`).
+   - Mypy: Success: no issues found in 64 source files.
+
+3. **Backend Overall Coverage Gate**:
+   ```bash
+   cd apps/api && uv run pytest --cov=modelfit --cov-report=term-missing
+   ```
+   *Result*: Backend overall coverage: **80%** (meets >= 80% gate). Pure estimator coverage: **97%** (exceeds >= 95% gate).
+
+5. **Import-Linter Service-Only Boundaries**:
+   ```bash
+   cd apps/api && uv run lint-imports
+   ```
+   *Result*: Contracts: 3 kept, 0 broken (`Estimator must be pure KEPT`, `Services must not import routers KEPT`, `Chat and recommend must only import other modules through services KEPT`).
+
+---
+
+## Phase 4 Execution Summary (Checkpoint B: Frontend & Integration)
+
+### Real Commands Run & Verified Outputs
+
+1. **Frontend Type Checking**:
+   ```bash
+   cd apps/web && npm run typecheck
+   ```
+   *Result*: Clean compilation (0 errors) with full strict TypeScript adherence.
+
+2. **Focused Vitest Tests**:
+   ```bash
+   cd apps/web && npx vitest run tests/chat-stream.test.tsx
+   ```
+   *Result*: 2 passed in 209ms (`parseSSEChunk` multi-event/incomplete buffer parsing, and `RecommendationCardView` deterministic render & `/estimator` URL generation).
+
+3. **Live `/recommend` Verification Call**:
+   ```bash
+   cd apps/api && uv run python scripts/verify_recommend_call.py
+   ```
+   *Result*: Total external Hugging Face Hub HTTP calls: 25.
+   - Identified 2 compatible candidates matching RTX 4070 12GB:
+     - `Qwen/Qwen2.5-Coder-7B-Instruct`: fits (total: 5.59 GB, headroom: 6.65 GB, score: 0.8466)
+     - `Qwen/Qwen2.5-Coder-14B-Instruct`: fits_tight (total: 11.80 GB, headroom: 0.44 GB, score: 0.5397)
+   - Dropped OOM count: 3; dropped unsupported count: 3.
+   - Candidate evaluation cap (MAX_CANDIDATES 25 -> 8): design choice, unmeasured.
+
+4. **Architecture Hygiene & Client Math Elimination**:
+   - Deleted `advisorFlow.ts` and `calculationEngine.ts`.
+   - Deleted mock UI components `AdvancedConfiguration.tsx`, `RecommendationReport.tsx`, `ModelComparisonTable.tsx`, `TechnicalBreakdown.tsx`, `ChatHome.tsx`, `ConversationView.tsx`, and `MessageBubble.tsx`.
+   - Created dedicated `/chat` route powered by `useChatStream` (SSE + AbortController), stop button, retry button, tool execution badges, and direct links to `/estimator`.
+   - Wired `apps/web/src/app/page.tsx` to redirect immediately to `/chat`.
+
+
 

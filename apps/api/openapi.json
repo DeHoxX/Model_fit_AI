@@ -23,6 +23,76 @@
         "title": "AttentionVariant",
         "type": "string"
       },
+      "ChatMessagePayload": {
+        "properties": {
+          "content": {
+            "description": "Message text content.",
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "description": "Message role.",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessagePayload",
+        "type": "object"
+      },
+      "ChatRequest": {
+        "properties": {
+          "messages": {
+            "description": "Bounded conversation history.",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessagePayload"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "ChatRequest",
+        "type": "object"
+      },
+      "ClarificationNeeded": {
+        "description": "Returned when essential requirements (hardware or task) are missing.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Fields",
+            "type": "array"
+          },
+          "needs_clarification": {
+            "default": true,
+            "title": "Needs Clarification",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "missing_fields",
+          "message"
+        ],
+        "title": "ClarificationNeeded",
+        "type": "object"
+      },
       "ConfidenceLevel": {
         "enum": [
           "high",
@@ -806,6 +876,299 @@
         "title": "QuantizationFormat",
         "type": "string"
       },
+      "RecommendationCandidate": {
+        "description": "A ranked model candidate with its deterministic estimate and score breakdown.",
+        "properties": {
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "context_length": {
+            "default": 8192,
+            "title": "Context Length",
+            "type": "integer"
+          },
+          "estimate": {
+            "$ref": "#/components/schemas/EstimationResult"
+          },
+          "kv_cache_dtype": {
+            "default": "fp16",
+            "title": "Kv Cache Dtype",
+            "type": "string"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "pipeline_tag": {
+            "title": "Pipeline Tag",
+            "type": "string"
+          },
+          "quantization": {
+            "default": "q4_k_m",
+            "title": "Quantization",
+            "type": "string"
+          },
+          "rank_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rank Reasons",
+            "type": "array"
+          },
+          "runtime": {
+            "default": "llama_cpp",
+            "title": "Runtime",
+            "type": "string"
+          },
+          "scoring": {
+            "$ref": "#/components/schemas/ScoringBreakdown"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "model_id",
+          "model_name",
+          "author",
+          "pipeline_tag",
+          "license",
+          "estimate",
+          "verdict",
+          "scoring"
+        ],
+        "title": "RecommendationCandidate",
+        "type": "object"
+      },
+      "RecommendationResponse": {
+        "description": "Full deterministic recommendation response.",
+        "properties": {
+          "dropped_oom_count": {
+            "default": 0,
+            "title": "Dropped Oom Count",
+            "type": "integer"
+          },
+          "dropped_unsupported_count": {
+            "default": 0,
+            "title": "Dropped Unsupported Count",
+            "type": "integer"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendationCandidate"
+            },
+            "title": "Recommendations",
+            "type": "array"
+          },
+          "unsupported_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported Reasons",
+            "type": "array"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "recommendations"
+        ],
+        "title": "RecommendationResponse",
+        "type": "object"
+      },
+      "RequirementSpec": {
+        "description": "Structured requirements extracted from user conversation or direct API call.",
+        "properties": {
+          "hardware": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HardwareProfileInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Target hardware device specifications."
+          },
+          "language_needs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Specific natural or programming language needs.",
+            "title": "Language Needs"
+          },
+          "license_preference": {
+            "default": "any",
+            "description": "License filtering preference.",
+            "enum": [
+              "permissive",
+              "open_weights",
+              "any"
+            ],
+            "title": "License Preference",
+            "type": "string"
+          },
+          "max_context": {
+            "default": 8192,
+            "description": "Target maximum context length in tokens.",
+            "maximum": 131072.0,
+            "minimum": 512.0,
+            "title": "Max Context",
+            "type": "integer"
+          },
+          "memory_budget_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Explicit memory budget in bytes if no hardware profile name is known.",
+            "title": "Memory Budget Bytes"
+          },
+          "quantization_preference": {
+            "$ref": "#/components/schemas/QuantizationFormat",
+            "default": "q4_k_m",
+            "description": "Preferred quantization precision."
+          },
+          "size_range": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Parameter size range in billions of parameters (min_b, max_b).",
+            "title": "Size Range"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "enum": [
+                  "general",
+                  "coding",
+                  "reasoning",
+                  "writing"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Target use case for the model.",
+            "title": "Task"
+          }
+        },
+        "title": "RequirementSpec",
+        "type": "object"
+      },
+      "ScoringBreakdown": {
+        "description": "Detailed score components calculated for a candidate.",
+        "properties": {
+          "downloads_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Downloads Score",
+            "type": "number"
+          },
+          "headroom_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Headroom Score",
+            "type": "number"
+          },
+          "license_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "License Score",
+            "type": "number"
+          },
+          "recency_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Recency Score",
+            "type": "number"
+          },
+          "total_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Total Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "headroom_score",
+          "downloads_score",
+          "recency_score",
+          "license_score",
+          "total_score"
+        ],
+        "title": "ScoringBreakdown",
+        "type": "object"
+      },
       "SupportStatus": {
         "enum": [
           "supported_llm",
@@ -875,6 +1238,41 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/chat": {
+      "post": {
+        "description": "Streams token deltas, tool call status, and recommendation cards as Server-Sent Events.",
+        "operationId": "chat_completions_api_v1_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send a message to the AI advisor and stream Server-Sent Events",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
     "/api/v1/estimate": {
       "post": {
         "description": "Performs deterministic memory estimation for model, config, and hardware.",
@@ -1162,6 +1560,56 @@
         "summary": "Get model details and normalized architecture",
         "tags": [
           "Model Catalog"
+        ]
+      }
+    },
+    "/api/v1/recommend": {
+      "post": {
+        "description": "Calculates deterministic model rankings based on memory fit and scoring.",
+        "operationId": "get_recommendations_api_v1_recommend_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequirementSpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RecommendationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ClarificationNeeded"
+                    }
+                  ],
+                  "title": "Response Get Recommendations Api V1 Recommend Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get deterministic model recommendations based on hardware and requirements",
+        "tags": [
+          "recommend"
         ]
       }
     }

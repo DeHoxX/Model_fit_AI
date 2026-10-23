@@ -193,3 +193,99 @@
     "warning": null
   }
   ```
+
+---
+
+### Recommendations & Natural Language Chat
+
+#### Get Model Recommendations
+- **Route**: `POST /api/v1/recommend`
+- **Behavior**: Evaluates candidate models against user requirements and hardware constraints. Filters out unsupported architectures and models that will OOM, then applies deterministic multi-objective ranking (headroom curve, downloads, recency, license alignment).
+- **Request Body**:
+  ```json
+  {
+    "task": "coding",
+    "hardware": {
+      "name": "RTX 3060 12GB",
+      "memory_bytes": 12884901888,
+      "kind": "gpu",
+      "reserved_memory_bytes": 1073741824
+    },
+    "memory_budget_bytes": null,
+    "quantization_preference": "Q4_K_M",
+    "license_preference": "permissive",
+    "context_length": 4096,
+    "max_candidates": 5
+  }
+  ```
+- **Response**: `200 OK` (when requirements are complete)
+  ```json
+  {
+    "recommendations": [
+      {
+        "model_id": "meta-llama/Meta-Llama-3-8B",
+        "score": 0.88,
+        "fits": true,
+        "fits_tight": false,
+        "estimated_total_bytes": 5899264000,
+        "breakdown": {
+          "headroom_score": 1.0,
+          "downloads_score": 0.85,
+          "recency_score": 0.90,
+          "license_score": 1.0
+        },
+        "reason": "Optimal 54% memory utilization with high community adoption and permissive license alignment."
+      }
+    ],
+    "dropped_oom_count": 2,
+    "dropped_unsupported_count": 1,
+    "unsupported_reasons": ["mamba architecture is unsupported in v1"]
+  }
+  ```
+- **Clarification Response**: `200 OK` with `ClarificationNeeded` schema if required fields (`task` or hardware) are missing:
+  ```json
+  {
+    "missing_fields": ["task"],
+    "prompt": "Please specify what you would like to use the model for (e.g., coding, general chat, reasoning, writing)."
+  }
+  ```
+
+#### Chat Advisor (SSE Stream)
+- **Route**: `POST /api/v1/chat`
+- **Rate Limit**: 4 requests per minute per IP. Returns `429 RATE_LIMITED` with `Retry-After`.
+- **Behavior**: Streams Server-Sent Events (SSE) representing LLM tokens, tool calling iterations, and post-checked recommendation cards.
+- **Request Body**:
+  ```json
+  {
+    "messages": [
+      {"role": "user", "content": "I have an RTX 3060 12GB and want a model for code generation."}
+    ]
+  }
+  ```
+- **SSE Stream Protocol**:
+  Each event is formatted as `event: <type>\ndata: <json>\n\n`:
+  - `event: token`: Emitted as text streams from the model.
+    ```json
+    {"token": "Here"}
+    ```
+  - `event: tool_call`: Emitted when the model triggers a grounded tool.
+    ```json
+    {"name": "recommend_models", "args": {"task": "coding", "hardware_name": "RTX 3060 12GB"}}
+    ```
+  - `event: tool_result`: Emitted when tool execution completes.
+    ```json
+    {"name": "recommend_models", "status": "completed", "summary": "Found 3 matching candidates"}
+    ```
+  - `event: recommendation`: Emitted after model completion with grounded, verified candidate cards.
+    ```json
+    {"recommendations": [{"model_id": "Qwen/Qwen2.5-Coder-7B", "fits": true, "score": 0.91}]}
+    ```
+  - `event: done`: Emitted at stream conclusion.
+    ```json
+    {}
+    ```
+  - `event: error`: Emitted if an unhandled error or quota exhaustion occurs.
+    ```json
+    {"code": "LLM_QUOTA_EXCEEDED", "message": "Upstream LLM rate limit or quota exceeded. Please try again shortly."}
+    ```
+

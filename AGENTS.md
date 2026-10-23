@@ -51,8 +51,9 @@ Vitest, Testing Library, Playwright.
 Backend: Python 3.12+, FastAPI, Pydantic v2 with pydantic-settings,
 SQLAlchemy 2.x async with asyncpg, Alembic, huggingface_hub, httpx,
 structlog, pytest, pytest-asyncio, respx, hypothesis, ruff, mypy strict,
-import-linter. LLM access through the official Anthropic SDK behind a small
-LLMClient interface.
+import-linter. LLM access through the official Google GenAI SDK (google-genai)
+behind a small, provider-neutral LLMClient interface configured via
+LLM_PROVIDER, LLM_API_KEY, and LLM_MODEL (with no hardcoded model default).
 Data: PostgreSQL 16+. No Redis.
 Infra: Docker (multi-stage, non-root), Docker Compose, Caddy, GitHub Actions.
 Package managers: uv and pnpm.

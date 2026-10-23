@@ -67,7 +67,9 @@ Open [http://localhost:3000](http://localhost:3000) for the Advisor UI or [http:
 | `GIT_SHA` | No | `development` | Git commit SHA for build tracking. |
 | `ADMIN_TOKEN` | No | - | Secret token required for administrative endpoints (`Phase 5`). |
 | `HF_TOKEN` | No | - | Hugging Face Hub API read token (`Phase 3+`). |
-| `ANTHROPIC_API_KEY`| No | - | LLM API key for conversational advisor (`Phase 4+`). |
+| `LLM_PROVIDER` | No | `gemini` | Supported LLM provider (`gemini`). |
+| `LLM_API_KEY` | No | - | API key for Google Gemini (`Phase 4+`). |
+| `LLM_MODEL` | No | - | Explicit model identifier for Gemini (no default) (`Phase 4+`). |
 
 ---
 

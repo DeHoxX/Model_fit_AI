@@ -10,6 +10,7 @@ Ensures:
 
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import cast
 
 import pytest
 import sqlalchemy as sa
@@ -115,7 +116,7 @@ async def test_postgres_schema_matches_orm_metadata(postgres_test_db: AsyncEngin
             conn,
             opts={"compare_type": True, "compare_server_default": True},
         )
-        return compare_metadata(ctx, Base.metadata)
+        return cast(list[object], compare_metadata(ctx, Base.metadata))
 
     async with postgres_test_db.connect() as conn:
         diff = await conn.run_sync(do_compare)

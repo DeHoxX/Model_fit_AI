@@ -24,14 +24,29 @@ from modelfit.core.middleware import (
 )
 from modelfit.db.session import close_db
 from modelfit.modules.catalog.router import router as catalog_router
+from modelfit.modules.chat.router import router as chat_router
 from modelfit.modules.hardware.router import router as hardware_router
 from modelfit.modules.health.router import router as health_router
+from modelfit.modules.recommend.router import router as recommend_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan for clean startup and resource cleanup."""
     setup_logging(settings.LOG_LEVEL)
+
+    # Validate LLM credentials at startup in development and production
+    if settings.APP_ENV != "test":
+        if not settings.LLM_API_KEY:
+            raise RuntimeError(
+                "LLM_API_KEY environment variable is required in development and production modes."
+            )
+        if not settings.LLM_MODEL:
+            raise RuntimeError(
+                "LLM_MODEL environment variable must be explicitly configured "
+                "(e.g. export LLM_MODEL=<model-name>)."
+            )
+
     yield
     await close_db()
 
@@ -74,6 +89,8 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(hardware_router, prefix="/api/v1")
     app.include_router(catalog_router, prefix="/api/v1")
+    app.include_router(recommend_router, prefix="/api/v1")
+    app.include_router(chat_router, prefix="/api/v1")
 
     return app
 

@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a message to the AI advisor and stream Server-Sent Events
+         * @description Streams token deltas, tool call status, and recommendation cards as Server-Sent Events.
+         */
+        post: operations["chat_completions_api_v1_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/estimate": {
         parameters: {
             query?: never;
@@ -144,6 +164,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recommend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get deterministic model recommendations based on hardware and requirements
+         * @description Calculates deterministic model rankings based on memory fit and scoring.
+         */
+        post: operations["get_recommendations_api_v1_recommend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -158,6 +198,43 @@ export interface components {
          * @enum {string}
          */
         AttentionVariant: "full_mha" | "grouped_query" | "multi_query" | "sliding_window";
+        /** ChatMessagePayload */
+        ChatMessagePayload: {
+            /**
+             * Content
+             * @description Message text content.
+             */
+            content: string;
+            /**
+             * Role
+             * @description Message role.
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+        };
+        /** ChatRequest */
+        ChatRequest: {
+            /**
+             * Messages
+             * @description Bounded conversation history.
+             */
+            messages: components["schemas"]["ChatMessagePayload"][];
+        };
+        /**
+         * ClarificationNeeded
+         * @description Returned when essential requirements (hardware or task) are missing.
+         */
+        ClarificationNeeded: {
+            /** Message */
+            message: string;
+            /** Missing Fields */
+            missing_fields: string[];
+            /**
+             * Needs Clarification
+             * @default true
+             */
+            needs_clarification: boolean;
+        };
         /**
          * ConfidenceLevel
          * @enum {string}
@@ -477,6 +554,139 @@ export interface components {
          */
         QuantizationFormat: "fp32" | "fp16" | "bf16" | "int8" | "q8_0" | "q5_k_m" | "q4_k_m" | "q4_k_s" | "q4_0" | "q4_1" | "awq_4bit" | "gptq_4bit";
         /**
+         * RecommendationCandidate
+         * @description A ranked model candidate with its deterministic estimate and score breakdown.
+         */
+        RecommendationCandidate: {
+            /** Assumptions */
+            assumptions?: string[];
+            /** Author */
+            author: string;
+            /**
+             * Context Length
+             * @default 8192
+             */
+            context_length: number;
+            estimate: components["schemas"]["EstimationResult"];
+            /**
+             * Kv Cache Dtype
+             * @default fp16
+             */
+            kv_cache_dtype: string;
+            /** License */
+            license: string | null;
+            /** Model Id */
+            model_id: string;
+            /** Model Name */
+            model_name: string;
+            /** Pipeline Tag */
+            pipeline_tag: string;
+            /**
+             * Quantization
+             * @default q4_k_m
+             */
+            quantization: string;
+            /** Rank Reasons */
+            rank_reasons?: string[];
+            /**
+             * Runtime
+             * @default llama_cpp
+             */
+            runtime: string;
+            scoring: components["schemas"]["ScoringBreakdown"];
+            /** Verdict */
+            verdict: string;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /**
+         * RecommendationResponse
+         * @description Full deterministic recommendation response.
+         */
+        RecommendationResponse: {
+            /**
+             * Dropped Oom Count
+             * @default 0
+             */
+            dropped_oom_count: number;
+            /**
+             * Dropped Unsupported Count
+             * @default 0
+             */
+            dropped_unsupported_count: number;
+            /** Recommendations */
+            recommendations: components["schemas"]["RecommendationCandidate"][];
+            /** Unsupported Reasons */
+            unsupported_reasons?: string[];
+            /** Warning */
+            warning?: string | null;
+        };
+        /**
+         * RequirementSpec
+         * @description Structured requirements extracted from user conversation or direct API call.
+         */
+        RequirementSpec: {
+            /** @description Target hardware device specifications. */
+            hardware?: components["schemas"]["HardwareProfileInput"] | null;
+            /**
+             * Language Needs
+             * @description Specific natural or programming language needs.
+             */
+            language_needs?: string[] | null;
+            /**
+             * License Preference
+             * @description License filtering preference.
+             * @default any
+             * @enum {string}
+             */
+            license_preference: "permissive" | "open_weights" | "any";
+            /**
+             * Max Context
+             * @description Target maximum context length in tokens.
+             * @default 8192
+             */
+            max_context: number;
+            /**
+             * Memory Budget Bytes
+             * @description Explicit memory budget in bytes if no hardware profile name is known.
+             */
+            memory_budget_bytes?: number | null;
+            /**
+             * @description Preferred quantization precision.
+             * @default q4_k_m
+             */
+            quantization_preference: components["schemas"]["QuantizationFormat"];
+            /**
+             * Size Range
+             * @description Parameter size range in billions of parameters (min_b, max_b).
+             */
+            size_range?: [
+                number,
+                number
+            ] | null;
+            /**
+             * Task
+             * @description Target use case for the model.
+             */
+            task?: ("general" | "coding" | "reasoning" | "writing") | null;
+        };
+        /**
+         * ScoringBreakdown
+         * @description Detailed score components calculated for a candidate.
+         */
+        ScoringBreakdown: {
+            /** Downloads Score */
+            downloads_score: number;
+            /** Headroom Score */
+            headroom_score: number;
+            /** License Score */
+            license_score: number;
+            /** Recency Score */
+            recency_score: number;
+            /** Total Score */
+            total_score: number;
+        };
+        /**
          * SupportStatus
          * @enum {string}
          */
@@ -508,6 +718,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    chat_completions_api_v1_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     estimate_api_v1_estimate_post: {
         parameters: {
             query?: never;
@@ -683,6 +924,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_recommendations_api_v1_recommend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequirementSpec"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationResponse"] | components["schemas"]["ClarificationNeeded"];
                 };
             };
             /** @description Validation Error */

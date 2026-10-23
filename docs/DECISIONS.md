@@ -83,8 +83,24 @@
   6. Migration `0005_model_support_status` adds `support_status`, `support_reason_code`, and `support_reason_message` to `model_cache`, expiring existing rows so they are re-classified on next fetch.
 * **Consequences**: Rock-solid resilience against non-decoder Hub repositories, explicit user feedback, and strict preservation of estimator purity.
 
+## ADR-0009: Conversational AI Advisor via Google Gemini SDK & Grounded Tool Calling
+* **Status**: Accepted
+* **Context**: ModelFit requires natural language model recommendation and sizing advice. Users should be able to state requirements in conversational English (e.g. "I have an RTX 3060 and want to run code generation"). The conversational agent must be strictly grounded: the LLM must NEVER invent or hallucinate memory estimates, model architectures, or performance numbers (AGENTS.md Rule 1 & Rule 2).
+* **Decision**:
+  1. Adopt the official Google GenAI SDK (`google-genai==2.33.0`) behind a provider-neutral `LLMClient` protocol configured via `LLM_PROVIDER`, `LLM_API_KEY`, and `LLM_MODEL`. No hardcoded model defaults are embedded in code or configuration.
+  2. In testing (`APP_ENV=test`), `FakeScriptedLLMClient` provides deterministic mock turns without network dependencies or external keys. In development and production (`APP_ENV != "test"`), missing keys or models fail fast at startup; fallback to mocks in production is strictly forbidden.
+  3. Automatic Function Calling (AFC) in `google-genai` is explicitly disabled via `types.AutomaticFunctionCallingConfig(disable=True)`. ModelFit's `ChatService` orchestrates execution explicitly, enforcing a hard round cap (`MAX_TOOL_ROUNDS = 5`), recording SSE events for each tool step, and executing post-checks.
+  4. Post-Check Guardrail: Any model ID mentioned by the LLM that was not returned by a grounded tool execution during that turn is stripped from recommendation cards to prevent hallucinated recommendations.
+  5. Per-IP Sliding-Window Rate Limiter: Chat endpoints are capped at 4 requests per minute per IP to protect Gemini API quotas and server resources, returning 429 `RATE_LIMITED` when exceeded.
+  7. Prompt Injection Resistance & Limitations: System instructions instruct the LLM to never alter estimates or override system rules. However, prompt engineering alone cannot guarantee 100% prevention against novel adversarial injection techniques; automated injection testing is executed against a scripted fake LLM client in the test suite rather than live adversarial testing. The post-check validation mechanism strictly checks and strips model identifiers not produced by verified tool executions (it does not parse or verify arbitrary text statements).
+  8. Candidate Evaluation Cap (MAX_CANDIDATES 25 -> 8): Evaluating a single candidate requires multiple upstream Hugging Face HTTP requests (metadata API, config.json fetch, and safetensors Range request). Capping candidate evaluation at 8 instead of 25 is a design choice, unmeasured.
+* **Consequences**: Deterministic grounding, complete auditability over tool calls via SSE, robust rate limiting, and zero risk of hallucinated memory or model statistics.
+
 ## Dependency Justifications
 * `huggingface-hub` (apps/api): Official Hugging Face client library for model metadata structures and ecosystem compatibility.
+* `google-genai` (apps/api): Official Google GenAI SDK for Gemini streaming and function calling in the conversational advisor.
 * `@playwright/test` (apps/web): Required for critical journeys and end-to-end browser testing as specified in AGENTS.md.
+* `react-markdown` (apps/web): Safe markdown rendering for assistant responses in the chat interface.
+* `rehype-sanitize` (apps/web): Strict HTML sanitization schema preventing XSS injection in user/assistant markdown.
 
 

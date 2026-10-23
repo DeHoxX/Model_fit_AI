@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     HF_TOKEN: str | None = None
-    ANTHROPIC_API_KEY: str | None = None
+    LLM_PROVIDER: Literal["gemini"] = "gemini"
+    LLM_API_KEY: str | None = None
+    LLM_MODEL: str | None = None
     ADMIN_TOKEN: str | None = None
 
     model_config = SettingsConfigDict(
