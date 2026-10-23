@@ -1,16 +1,16 @@
 """Request-ID and security headers middleware."""
 
 import uuid
-from typing import Callable
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
+
 import structlog
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 
 class RequestIDAndLoggingMiddleware(BaseHTTPMiddleware):
     """Binds an incoming or newly generated X-Request-ID to context and response headers."""
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Response]) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         req_id = request.headers.get("X-Request-ID")
         if not req_id:
             req_id = str(uuid.uuid4())
@@ -29,13 +29,18 @@ class RequestIDAndLoggingMiddleware(BaseHTTPMiddleware):
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Applies strict modern security headers to all HTTP responses."""
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Response]) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; img-src 'self' data: https:; script-src 'self'; style-src 'self' 'unsafe-inline';"
+        csp_policy = (
+            "default-src 'self'; "
+            "img-src 'self' data: https:; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline';"
         )
+        response.headers["Content-Security-Policy"] = csp_policy
         return response

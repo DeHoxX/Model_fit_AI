@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import AsyncGenerator
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -10,10 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
-from modelfit.core.config import settings
 from modelfit.db.base import Base
 from modelfit.db.session import get_db
 from modelfit.main import create_app
+from modelfit.modules.catalog.models import ModelCache  # noqa: F401
+from modelfit.modules.hardware.models import HardwareProfile  # noqa: F401
 
 test_engine = create_async_engine(
     "sqlite+aiosqlite:///:memory:",

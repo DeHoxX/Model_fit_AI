@@ -2,6 +2,7 @@
 
 import pytest
 from pydantic import ValidationError
+
 from modelfit.core.config import Settings
 
 
@@ -30,3 +31,16 @@ def test_production_accepts_valid_origins() -> None:
         "https://modelfit.example.com",
         "https://app.example.com",
     ]
+
+
+def test_settings_loads_root_env_from_apps_api_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Settings must find and load root .env even when instantiated from apps/api/."""
+    from pathlib import Path
+
+    root_env = Path(__file__).resolve().parents[3] / ".env"
+    if root_env.exists():
+        # Remove pytest env overrides to test pure .env loading
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.delenv("APP_ENV", raising=False)
+        settings = Settings()
+        assert "modelfit_dev_password" in settings.DATABASE_URL

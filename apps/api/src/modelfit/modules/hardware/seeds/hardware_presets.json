@@ -1,0 +1,56 @@
+[
+  {
+    "name": "NVIDIA GeForce RTX 3060 12GB",
+    "memory_bytes": 12884901888,
+    "kind": "gpu",
+    "reserved_memory_bytes": 536870912,
+    "source_url": "https://www.nvidia.com/en-us/geforce/graphics-cards/30-series/rtx-3060-3060ti/",
+    "is_verified": true,
+    "notes": "12 GB GDDR6 desktop GPU. Reserved memory (512 MiB) is an assumption [TODO(verify)]."
+  },
+  {
+    "name": "NVIDIA GeForce RTX 4090",
+    "memory_bytes": 25769803776,
+    "kind": "gpu",
+    "reserved_memory_bytes": 1073741824,
+    "source_url": "https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/",
+    "is_verified": true,
+    "notes": "24 GB GDDR6X desktop flagship. Reserved memory (1024 MiB) is an assumption [TODO(verify)]."
+  },
+  {
+    "name": "NVIDIA A100-PCIE-80GB",
+    "memory_bytes": 85899345920,
+    "kind": "gpu",
+    "reserved_memory_bytes": 0,
+    "source_url": "https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf",
+    "is_verified": true,
+    "notes": "80 GB HBM2e enterprise accelerator (PCIe variant). 0 reserved memory is an assumption [TODO(verify)]."
+  },
+  {
+    "name": "NVIDIA H100-SXM5-80GB",
+    "memory_bytes": 85899345920,
+    "kind": "gpu",
+    "reserved_memory_bytes": 0,
+    "source_url": "https://resources.nvidia.com/en-us-tensor-core/nvidia-tensor-core-gpu-datasheet",
+    "is_verified": true,
+    "notes": "80 GB HBM3 enterprise accelerator (SXM5 variant). 0 reserved memory is an assumption [TODO(verify)]."
+  },
+  {
+    "name": "Apple Mac 16GB Unified",
+    "memory_bytes": 17179869184,
+    "kind": "apple_unified",
+    "reserved_memory_bytes": 3221225472,
+    "source_url": "https://www.apple.com/macbook-pro/specs/",
+    "is_verified": true,
+    "notes": "16 GB Apple Silicon unified memory. 3 GiB macOS reserve is an assumption [TODO(verify)]."
+  },
+  {
+    "name": "Apple Mac 32GB Unified",
+    "memory_bytes": 34359738368,
+    "kind": "apple_unified",
+    "reserved_memory_bytes": 4294967296,
+    "source_url": "https://www.apple.com/macbook-pro/specs/",
+    "is_verified": true,
+    "notes": "32 GB Apple Silicon unified memory. 4 GiB macOS reserve is an assumption [TODO(verify)]."
+  }
+]

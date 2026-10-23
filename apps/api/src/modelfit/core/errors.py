@@ -1,6 +1,7 @@
 """Standard application errors and error envelope formatting."""
 
 from typing import Any
+
 from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -16,12 +17,14 @@ class AppError(Exception):
         message: str,
         status_code: int = status.HTTP_400_BAD_REQUEST,
         details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
         self.details = details or {}
+        self.headers = headers or {}
 
 
 class DatabaseUnavailableError(AppError):
@@ -63,7 +66,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         details=exc.details,
         request_id=request_id,
     )
-    return JSONResponse(status_code=exc.status_code, content=envelope)
+    return JSONResponse(status_code=exc.status_code, content=envelope, headers=exc.headers)
 
 
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:

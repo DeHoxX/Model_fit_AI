@@ -4,7 +4,12 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, XCircle, RefreshCw, Server, Database, Info, ShieldCheck } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { HealthReadyResponse, MetaResponse } from '@/api/schema';
+import { paths } from '@/api/schema';
+
+export type HealthReadyResponse =
+  paths['/api/v1/health/ready']['get']['responses']['200']['content']['application/json'];
+export type MetaResponse =
+  paths['/api/v1/meta']['get']['responses']['200']['content']['application/json'];
 
 export default function StatusPage() {
   const [readyData, setReadyData] = useState<HealthReadyResponse | null>(null);

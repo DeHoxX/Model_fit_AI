@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from modelfit.db.session import get_db
 from modelfit.modules.health.service import HealthService
 

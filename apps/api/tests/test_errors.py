@@ -1,21 +1,17 @@
 """Tests for error envelope compliance across 404, 422, 500 and security headers."""
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from pydantic import BaseModel, Field
+
 from modelfit.core.errors import (
-    AppError,
-    app_error_handler,
-    http_exception_handler,
     unhandled_exception_handler,
     validation_error_handler,
 )
 from modelfit.core.middleware import (
     RequestIDAndLoggingMiddleware,
-    SecurityHeadersMiddleware,
 )
-from pydantic import BaseModel, Field
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 @pytest.mark.asyncio
@@ -67,8 +63,11 @@ async def test_422_validation_error_envelope() -> None:
     async def validate_item(item: ItemPayload) -> dict[str, int]:
         return {"num": item.num}
 
+    from typing import Any, cast
+
     from fastapi.exceptions import RequestValidationError
-    app.add_exception_handler(RequestValidationError, validation_error_handler)
+
+    app.add_exception_handler(RequestValidationError, cast(Any, validation_error_handler))
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

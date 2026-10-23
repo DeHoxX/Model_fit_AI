@@ -1,5 +1,6 @@
 import React from 'react';
-import { Sliders, Cpu, Sparkles, PanelLeft, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+import { Sliders, Cpu, Sparkles, PanelLeft, ArrowLeft, Calculator } from 'lucide-react';
 
 interface TopToolbarProps {
   currentView: 'chat' | 'advanced' | 'report';
@@ -50,6 +51,16 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
       </div>
 
       <div className="flex items-center gap-2">
+        <Link
+          href="/estimator"
+          className="flex items-center gap-1.5 text-xs text-[#96a99e] hover:text-[#e4ece7] bg-[#181e1c] hover:bg-[#222b28] border border-[#27322e] px-3 py-1.5 rounded-lg transition-colors"
+          title="Open Memory Estimator Engine"
+          id="top-estimator-nav-btn"
+        >
+          <Calculator size={14} className="text-[#75a691]" />
+          <span>Estimator</span>
+        </Link>
+
         <button
           type="button"
           onClick={onOpenHardwareModal}

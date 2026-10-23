@@ -1,10 +1,11 @@
 """Baseline schema initialization.
 
 Revision ID: 0001_baseline
-Revises: 
+Revises:
 Create Date: 2026-10-22 00:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.

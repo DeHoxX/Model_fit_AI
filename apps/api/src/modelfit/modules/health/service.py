@@ -1,8 +1,10 @@
 """Health check business logic."""
 
 import asyncio
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from modelfit.core.config import settings
 from modelfit.core.errors import DatabaseUnavailableError
 

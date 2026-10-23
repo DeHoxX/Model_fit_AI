@@ -1,10 +1,11 @@
 import asyncio
 from logging.config import fileConfig
-from alembic import context
+
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from modelfit.core.config import settings
 from modelfit.db.base import Base
 
@@ -55,7 +56,12 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+    connectable = config.attributes.get("connection", None)
+
+    if connectable is not None:
+        do_run_migrations(connectable)
+    else:
+        asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():

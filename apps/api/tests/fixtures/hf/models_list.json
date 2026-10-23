@@ -1,0 +1,42 @@
+[
+  {
+    "id": "meta-llama/Meta-Llama-3-8B",
+    "author": "meta-llama",
+    "name": "Meta-Llama-3-8B",
+    "likes": 8450,
+    "downloads": 1250000,
+    "pipeline_tag": "text-generation",
+    "gated": false,
+    "cardData": { "license": "llama3" }
+  },
+  {
+    "id": "mistralai/Mistral-7B-v0.1",
+    "author": "mistralai",
+    "name": "Mistral-7B-v0.1",
+    "likes": 5600,
+    "downloads": 980000,
+    "pipeline_tag": "text-generation",
+    "gated": false,
+    "cardData": { "license": "apache-2.0" }
+  },
+  {
+    "id": "mistralai/Mixtral-8x7B-v0.1",
+    "author": "mistralai",
+    "name": "Mixtral-8x7B-v0.1",
+    "likes": 4200,
+    "downloads": 750000,
+    "pipeline_tag": "text-generation",
+    "gated": false,
+    "cardData": { "license": "apache-2.0" }
+  },
+  {
+    "id": "tiiuae/falcon-7b",
+    "author": "tiiuae",
+    "name": "falcon-7b",
+    "likes": 2800,
+    "downloads": 450000,
+    "pipeline_tag": "text-generation",
+    "gated": false,
+    "cardData": { "license": "apache-2.0" }
+  }
+]

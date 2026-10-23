@@ -2,6 +2,8 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any, cast
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +23,8 @@ from modelfit.core.middleware import (
     SecurityHeadersMiddleware,
 )
 from modelfit.db.session import close_db
+from modelfit.modules.catalog.router import router as catalog_router
+from modelfit.modules.hardware.router import router as hardware_router
 from modelfit.modules.health.router import router as health_router
 
 
@@ -61,13 +65,15 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIDAndLoggingMiddleware)
 
     # 4. Global Exception Handlers
-    app.add_exception_handler(AppError, app_error_handler)
-    app.add_exception_handler(RequestValidationError, validation_error_handler)
-    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-    app.add_exception_handler(Exception, unhandled_exception_handler)
+    app.add_exception_handler(AppError, cast(Any, app_error_handler))
+    app.add_exception_handler(RequestValidationError, cast(Any, validation_error_handler))
+    app.add_exception_handler(StarletteHTTPException, cast(Any, http_exception_handler))
+    app.add_exception_handler(Exception, cast(Any, unhandled_exception_handler))
 
     # 5. Routers mounted under /api/v1
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(hardware_router, prefix="/api/v1")
+    app.include_router(catalog_router, prefix="/api/v1")
 
     return app
 

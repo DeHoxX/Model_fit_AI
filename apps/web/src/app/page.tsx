@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+
 import { Activity } from 'lucide-react';
 import { UserHardwareProfile } from '@/types/hardware';
 import { AIModelSpec, QuantizationType } from '@/types/models';
@@ -26,20 +27,20 @@ const INITIAL_CONVERSATIONS: ChatConversation[] = [
   {
     id: 'conv-coding',
     title: 'Find a coding model',
-    createdAt: Date.now() - 3600000,
-    updatedAt: Date.now() - 1800000,
+    createdAt: 1700000000000,
+    updatedAt: 1700001800000,
     messages: [
       {
         id: 'msg-seed-1',
         sender: 'user',
         text: 'I want to run a local AI model for Python coding.',
-        timestamp: Date.now() - 3600000
+        timestamp: 1700000000000,
       },
       {
         id: 'msg-seed-2',
         sender: 'assistant',
         text: 'Running local coding models gives you complete code privacy! To tailor the ideal model size, what graphics card (GPU) or computer do you have?',
-        timestamp: Date.now() - 3590000,
+        timestamp: 1700000010000,
         quickReplies: [
           { id: 'qr-3060', label: 'NVIDIA RTX 3060 12GB', actionValue: 'I have an NVIDIA RTX 3060 12GB.', category: 'gpu' },
           { id: 'qr-4070', label: 'NVIDIA RTX 4070 12GB', actionValue: 'I have an NVIDIA RTX 4070 12GB.', category: 'gpu' },
@@ -52,22 +53,22 @@ const INITIAL_CONVERSATIONS: ChatConversation[] = [
   {
     id: 'conv-llama',
     title: 'Can my laptop run Llama?',
-    createdAt: Date.now() - 86400000,
-    updatedAt: Date.now() - 86400000,
+    createdAt: 1699900000000,
+    updatedAt: 1699900000000,
     messages: []
   },
   {
     id: 'conv-docs',
     title: 'Local AI for document analysis',
-    createdAt: Date.now() - 172800000,
-    updatedAt: Date.now() - 172800000,
+    createdAt: 1699800000000,
+    updatedAt: 1699800000000,
     messages: []
   },
   {
     id: 'conv-compare',
     title: 'Compare models for my GPU',
-    createdAt: Date.now() - 259200000,
-    updatedAt: Date.now() - 259200000,
+    createdAt: 1699700000000,
+    updatedAt: 1699700000000,
     messages: []
   }
 ];
@@ -76,15 +77,8 @@ export default function Home() {
   const [currentView, setCurrentView] = useState<'chat' | 'advanced' | 'report'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Hardware State
-  const [hardware, setHardware] = useState<UserHardwareProfile>(() => {
-    if (typeof window === 'undefined') return DEFAULT_HARDWARE_PROFILE;
-    try {
-      const saved = localStorage.getItem(STORAGE_HARDWARE);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return DEFAULT_HARDWARE_PROFILE;
-  });
+  // Hardware State - Initialized deterministically for SSR
+  const [hardware, setHardware] = useState<UserHardwareProfile>(DEFAULT_HARDWARE_PROFILE);
 
   // Model & Advanced Settings State
   const [selectedModel, setSelectedModel] = useState<AIModelSpec>(POPULAR_MODELS[0]);
@@ -97,36 +91,53 @@ export default function Home() {
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
-  // Conversations State
-  const [conversations, setConversations] = useState<ChatConversation[]>(() => {
-    if (typeof window === 'undefined') return INITIAL_CONVERSATIONS;
-    try {
-      const saved = localStorage.getItem(STORAGE_CONVOS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return INITIAL_CONVERSATIONS;
-  });
+  // Conversations State - Initialized deterministically for SSR
+  const [conversations, setConversations] = useState<ChatConversation[]>(INITIAL_CONVERSATIONS);
 
   const [activeConversationId, setActiveConversationId] = useState<string>(
     INITIAL_CONVERSATIONS[0].id
   );
 
   const [isLoadingAdvisor, setIsLoadingAdvisor] = useState(false);
+  const isLoadedRef = useRef(false);
+
+  // Hydrate client-only state from localStorage safely after mount
+  useEffect(() => {
+    try {
+      const savedHardware = localStorage.getItem(STORAGE_HARDWARE);
+      if (savedHardware) {
+        setHardware(JSON.parse(savedHardware));
+      }
+    } catch {}
+
+    try {
+      const savedConvos = localStorage.getItem(STORAGE_CONVOS);
+      if (savedConvos) {
+        const parsed = JSON.parse(savedConvos);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setConversations(parsed);
+          setActiveConversationId(parsed[0].id);
+        }
+      }
+    } catch {}
+
+    isLoadedRef.current = true;
+  }, []);
 
   useEffect(() => {
+    if (!isLoadedRef.current) return;
     try {
       localStorage.setItem(STORAGE_CONVOS, JSON.stringify(conversations));
     } catch {}
   }, [conversations]);
 
   useEffect(() => {
+    if (!isLoadedRef.current) return;
     try {
       localStorage.setItem(STORAGE_HARDWARE, JSON.stringify(hardware));
     } catch {}
   }, [hardware]);
+
 
   const activeConversation =
     conversations.find(c => c.id === activeConversationId) || conversations[0];

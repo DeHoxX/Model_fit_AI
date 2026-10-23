@@ -1,10 +1,948 @@
 {
+  "components": {
+    "schemas": {
+      "ArchitectureCategory": {
+        "enum": [
+          "standard_transformer",
+          "moe",
+          "mla",
+          "ssm",
+          "hybrid",
+          "multimodal"
+        ],
+        "title": "ArchitectureCategory",
+        "type": "string"
+      },
+      "AttentionVariant": {
+        "enum": [
+          "full_mha",
+          "grouped_query",
+          "multi_query",
+          "sliding_window"
+        ],
+        "title": "AttentionVariant",
+        "type": "string"
+      },
+      "ConfidenceLevel": {
+        "enum": [
+          "high",
+          "medium",
+          "low"
+        ],
+        "title": "ConfidenceLevel",
+        "type": "string"
+      },
+      "EstimateRequest": {
+        "additionalProperties": false,
+        "description": "Request payload for memory estimation.",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/EstimationConfig"
+          },
+          "hardware": {
+            "$ref": "#/components/schemas/HardwareProfileInput"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NormalizedModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repo_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repo Id"
+          }
+        },
+        "required": [
+          "config",
+          "hardware"
+        ],
+        "title": "EstimateRequest",
+        "type": "object"
+      },
+      "EstimationConfig": {
+        "additionalProperties": false,
+        "description": "Configuration for inference memory estimation.",
+        "properties": {
+          "batch_size": {
+            "default": 1,
+            "description": "Inference batch size",
+            "exclusiveMinimum": 0.0,
+            "title": "Batch Size",
+            "type": "integer"
+          },
+          "context_length": {
+            "description": "Requested inference sequence length in tokens",
+            "exclusiveMinimum": 0.0,
+            "title": "Context Length",
+            "type": "integer"
+          },
+          "gpu_count": {
+            "default": 1,
+            "description": "Total available GPUs",
+            "minimum": 1.0,
+            "title": "Gpu Count",
+            "type": "integer"
+          },
+          "kv_cache_dtype": {
+            "$ref": "#/components/schemas/KVCacheDtype",
+            "default": "fp16"
+          },
+          "quantization": {
+            "$ref": "#/components/schemas/QuantizationFormat"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/InferenceRuntime",
+            "default": "llama_cpp"
+          },
+          "tensor_parallel_degree": {
+            "default": 1,
+            "description": "Degree of tensor parallelism",
+            "minimum": 1.0,
+            "title": "Tensor Parallel Degree",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "quantization",
+          "context_length"
+        ],
+        "title": "EstimationConfig",
+        "type": "object"
+      },
+      "EstimationResult": {
+        "additionalProperties": false,
+        "description": "Calculated memory breakdown and fit verdict.",
+        "properties": {
+          "activation_bytes": {
+            "title": "Activation Bytes",
+            "type": "integer"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ConfidenceLevel"
+          },
+          "headroom_bytes": {
+            "title": "Headroom Bytes",
+            "type": "integer"
+          },
+          "kv_cache_bytes": {
+            "title": "Kv Cache Bytes",
+            "type": "integer"
+          },
+          "per_device_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Device Bytes"
+          },
+          "runtime_overhead_bytes": {
+            "title": "Runtime Overhead Bytes",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          },
+          "unsupported_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported Reasons",
+            "type": "array"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "weights_bytes": {
+            "title": "Weights Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "weights_bytes",
+          "kv_cache_bytes",
+          "activation_bytes",
+          "runtime_overhead_bytes",
+          "total_bytes",
+          "verdict",
+          "headroom_bytes",
+          "confidence"
+        ],
+        "title": "EstimationResult",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HardwareKind": {
+        "enum": [
+          "gpu",
+          "apple_unified",
+          "cpu_ram"
+        ],
+        "title": "HardwareKind",
+        "type": "string"
+      },
+      "HardwareProfileInput": {
+        "additionalProperties": false,
+        "description": "Hardware profile specification in bytes.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/HardwareKind",
+            "default": "gpu"
+          },
+          "memory_bytes": {
+            "description": "Total physical memory in bytes",
+            "exclusiveMinimum": 0.0,
+            "title": "Memory Bytes",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reserved_memory_bytes": {
+            "default": 0,
+            "description": "Memory reserved for OS or display in bytes",
+            "minimum": 0.0,
+            "title": "Reserved Memory Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "memory_bytes"
+        ],
+        "title": "HardwareProfileInput",
+        "type": "object"
+      },
+      "HardwareProfileResponse": {
+        "description": "Stored hardware preset response schema.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_verified": {
+            "title": "Is Verified",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "memory_bytes": {
+            "title": "Memory Bytes",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "reserved_memory_bytes": {
+            "title": "Reserved Memory Bytes",
+            "type": "integer"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "memory_bytes",
+          "reserved_memory_bytes",
+          "is_verified",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "HardwareProfileResponse",
+        "type": "object"
+      },
+      "InferenceRuntime": {
+        "enum": [
+          "llama_cpp",
+          "vllm",
+          "transformers"
+        ],
+        "title": "InferenceRuntime",
+        "type": "string"
+      },
+      "KVCacheDtype": {
+        "enum": [
+          "fp16",
+          "bf16",
+          "fp8",
+          "int8"
+        ],
+        "title": "KVCacheDtype",
+        "type": "string"
+      },
+      "ModelDetailResponse": {
+        "additionalProperties": false,
+        "description": "Full normalized model metadata with provenance, gated status, and license.",
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "downloads": {
+            "default": 0,
+            "title": "Downloads",
+            "type": "integer"
+          },
+          "gated": {
+            "default": false,
+            "title": "Gated",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_supported": {
+            "default": true,
+            "title": "Is Supported",
+            "type": "boolean"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
+          "likes": {
+            "default": 0,
+            "title": "Likes",
+            "type": "integer"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalized_model": {
+            "$ref": "#/components/schemas/NormalizedModel"
+          },
+          "param_provenance": {
+            "description": "Source of parameter counts: 'safetensors', 'config', or 'derived'",
+            "title": "Param Provenance",
+            "type": "string"
+          },
+          "pipeline_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pipeline Tag"
+          },
+          "support_reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Reason Code"
+          },
+          "support_reason_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Reason Message"
+          },
+          "support_status": {
+            "$ref": "#/components/schemas/SupportStatus",
+            "default": "supported_llm"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "model_name",
+          "param_provenance",
+          "normalized_model"
+        ],
+        "title": "ModelDetailResponse",
+        "type": "object"
+      },
+      "ModelListResponse": {
+        "additionalProperties": false,
+        "description": "Paginated list of models with opaque cursor.",
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ModelListResponse",
+        "type": "object"
+      },
+      "ModelSummary": {
+        "additionalProperties": false,
+        "description": "Compact summary of a model for search and discovery lists.",
+        "properties": {
+          "architecture_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Architecture Name"
+          },
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "downloads": {
+            "default": 0,
+            "title": "Downloads",
+            "type": "integer"
+          },
+          "gated": {
+            "default": false,
+            "title": "Gated",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_supported": {
+            "default": true,
+            "title": "Is Supported",
+            "type": "boolean"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
+          "likes": {
+            "default": 0,
+            "title": "Likes",
+            "type": "integer"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "pipeline_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pipeline Tag"
+          },
+          "support_reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Reason Code"
+          },
+          "support_reason_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Reason Message"
+          },
+          "support_status": {
+            "$ref": "#/components/schemas/SupportStatus",
+            "default": "not_checked"
+          },
+          "total_params": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Params"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "model_name"
+        ],
+        "title": "ModelSummary",
+        "type": "object"
+      },
+      "NormalizedModel": {
+        "additionalProperties": false,
+        "description": "Normalized model architecture metadata.\n\nContains strictly architecture and weight parameters.\nEvery numeric field is Optional to represent models with incomplete metadata.",
+        "properties": {
+          "active_params": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Params"
+          },
+          "architecture_category": {
+            "$ref": "#/components/schemas/ArchitectureCategory",
+            "default": "standard_transformer"
+          },
+          "architecture_name": {
+            "title": "Architecture Name",
+            "type": "string"
+          },
+          "attention_variant": {
+            "$ref": "#/components/schemas/AttentionVariant",
+            "default": "full_mha"
+          },
+          "experts_per_token": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experts Per Token"
+          },
+          "head_dim": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Dim"
+          },
+          "hidden_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden Size"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "intermediate_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intermediate Size"
+          },
+          "max_context_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Context Length"
+          },
+          "num_attention_heads": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Attention Heads"
+          },
+          "num_experts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Experts"
+          },
+          "num_kv_heads": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Kv Heads"
+          },
+          "num_layers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Layers"
+          },
+          "sliding_window_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sliding Window Size"
+          },
+          "tie_word_embeddings": {
+            "default": false,
+            "title": "Tie Word Embeddings",
+            "type": "boolean"
+          },
+          "total_params": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Params"
+          },
+          "vocab_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vocab Size"
+          }
+        },
+        "required": [
+          "id",
+          "architecture_name"
+        ],
+        "title": "NormalizedModel",
+        "type": "object"
+      },
+      "QuantizationFormat": {
+        "enum": [
+          "fp32",
+          "fp16",
+          "bf16",
+          "int8",
+          "q8_0",
+          "q5_k_m",
+          "q4_k_m",
+          "q4_k_s",
+          "q4_0",
+          "q4_1",
+          "awq_4bit",
+          "gptq_4bit"
+        ],
+        "title": "QuantizationFormat",
+        "type": "string"
+      },
+      "SupportStatus": {
+        "enum": [
+          "supported_llm",
+          "unsupported_architecture",
+          "unsupported_modality",
+          "incomplete_metadata",
+          "not_checked"
+        ],
+        "title": "SupportStatus",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "Verdict": {
+        "enum": [
+          "fits",
+          "fits_tight",
+          "does_not_fit",
+          "cannot_estimate"
+        ],
+        "title": "Verdict",
+        "type": "string"
+      }
+    }
+  },
   "info": {
     "title": "ModelFit API",
     "version": "1.0.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/estimate": {
+      "post": {
+        "description": "Performs deterministic memory estimation for model, config, and hardware.",
+        "operationId": "estimate_api_v1_estimate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstimateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstimationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Estimate model memory",
+        "tags": [
+          "Hardware & Estimation"
+        ]
+      }
+    },
+    "/api/v1/hardware": {
+      "get": {
+        "description": "Returns all preset hardware profiles with memory specifications.",
+        "operationId": "list_hardware_api_v1_hardware_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HardwareProfileResponse"
+                  },
+                  "title": "Response List Hardware Api V1 Hardware Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List hardware profiles",
+        "tags": [
+          "Hardware & Estimation"
+        ]
+      }
+    },
     "/api/v1/health/live": {
       "get": {
         "description": "Returns 200 if the process is alive.",
@@ -80,6 +1018,150 @@
         "summary": "Application Metadata",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/models": {
+      "get": {
+        "description": "Lists models from Hugging Face Hub with sorting, search, and cursor-based pagination.",
+        "operationId": "list_models_api_v1_models_get",
+        "parameters": [
+          {
+            "description": "Search query string",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search query string",
+              "title": "Search"
+            }
+          },
+          {
+            "description": "Sorting field",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "downloads",
+              "description": "Sorting field",
+              "enum": [
+                "downloads",
+                "likes",
+                "recent"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max results per page (capped at 50)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Max results per page (capped at 50)",
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor for pagination",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor for pagination",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Hugging Face models",
+        "tags": [
+          "Model Catalog"
+        ]
+      }
+    },
+    "/api/v1/models/{repo_id}": {
+      "get": {
+        "description": "Retrieves normalized architecture metadata, provenance, and support status.",
+        "operationId": "get_model_api_v1_models__repo_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repo_id",
+            "required": true,
+            "schema": {
+              "title": "Repo Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get model details and normalized architecture",
+        "tags": [
+          "Model Catalog"
         ]
       }
     }

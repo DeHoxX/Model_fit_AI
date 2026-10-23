@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   MessageSquarePlus,
   Search,
@@ -8,8 +9,11 @@ import {
   X,
   Trash2,
   Sliders,
-  ChevronLeft
+  ChevronLeft,
+  Calculator,
+  Compass,
 } from 'lucide-react';
+
 import { ChatConversation } from '../../types/chat';
 
 interface SidebarProps {
@@ -165,6 +169,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Bottom Utility Navigation */}
         <div className="p-2 border-t border-[#1d2622] space-y-0.5 bg-[#0e1211]">
+          <Link
+            href="/models"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-xs text-[#96a99e] hover:text-[#e4ece7] hover:bg-[#161e1b] rounded-md transition-colors"
+            id="sidebar-models-link"
+          >
+            <Compass size={14} className="text-[#75a691]" />
+            <span>Model Catalog</span>
+          </Link>
+
+          <Link
+            href="/estimator"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-xs text-[#96a99e] hover:text-[#e4ece7] hover:bg-[#161e1b] rounded-md transition-colors"
+            id="sidebar-estimator-link"
+          >
+            <Calculator size={14} className="text-[#75a691]" />
+            <span>Memory Estimator</span>
+          </Link>
+
+
           <button
             type="button"
             onClick={onNavigateToAdvanced}

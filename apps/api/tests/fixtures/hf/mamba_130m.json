@@ -1,0 +1,25 @@
+{
+  "id": "state-spaces/mamba-130m",
+  "author": "state-spaces",
+  "model_name": "mamba-130m",
+  "likes": 1200,
+  "downloads": 95000,
+  "pipeline_tag": "text-generation",
+  "gated": false,
+  "tags": ["mamba", "ssm"],
+  "cardData": {
+    "license": "apache-2.0"
+  },
+  "config": {
+    "architectures": ["MambaForCausalLM"],
+    "d_model": 768,
+    "fused_add_norm": true,
+    "model_type": "mamba",
+    "n_layer": 24,
+    "pad_vocab_size_multiple": 8,
+    "residual_in_fp32": true,
+    "rms_norm": true,
+    "tie_embeddings": true,
+    "vocab_size": 50280
+  }
+}

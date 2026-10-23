@@ -1,9 +1,10 @@
 """Tests for health check and metadata endpoints."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from unittest.mock import AsyncMock, patch
 
 from modelfit.db.session import get_db
 from modelfit.main import create_app

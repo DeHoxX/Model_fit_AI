@@ -1,0 +1,27 @@
+{
+  "id": "deepseek-ai/DeepSeek-V2",
+  "author": "deepseek-ai",
+  "model_name": "DeepSeek-V2",
+  "likes": 3100,
+  "downloads": 180000,
+  "pipeline_tag": "text-generation",
+  "gated": false,
+  "tags": ["deepseek", "mla", "moe"],
+  "cardData": {
+    "license": "deepseek"
+  },
+  "config": {
+    "architectures": ["DeepseekV2ForCausalLM"],
+    "hidden_size": 5120,
+    "intermediate_size": 12288,
+    "kv_lora_rank": 512,
+    "q_lora_rank": 1536,
+    "max_position_embeddings": 163840,
+    "model_type": "deepseek_v2",
+    "num_attention_heads": 128,
+    "num_hidden_layers": 60,
+    "num_key_value_heads": 128,
+    "torch_dtype": "bfloat16",
+    "vocab_size": 102400
+  }
+}

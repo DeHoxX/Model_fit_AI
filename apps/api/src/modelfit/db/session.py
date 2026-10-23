@@ -1,12 +1,14 @@
 """Async database engine and session management."""
 
 from collections.abc import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+
 from modelfit.core.config import settings
 
 engine: AsyncEngine | None = None
