@@ -1,20 +1,20 @@
 <#
 .SYNOPSIS
-    Development and CI helper script for ModelFit on Windows / PowerShell.
+    Development runner script for ModelFit on Windows / PowerShell.
 .DESCRIPTION
-    Provides commands matching the project Makefile:
-    dev-api, dev-web, up, down, logs, lint, format, typecheck, test, migrate, migration-new, gen-apiclient, check
+    Provides commands for local development (no Docker required):
+    dev, dev-api, dev-web, lint, format, typecheck, test, migrate, migration-new, gen-apiclient, check
 #>
 
 [CmdletBinding()]
 param(
-    [Parameter(Position = 0, Mandatory = $true)]
+    [Parameter(Position = 0, Mandatory = $false)]
     [ValidateSet(
-        "up", "down", "logs", "dev-api", "dev-web",
+        "dev", "dev-api", "dev-web",
         "lint", "format", "typecheck", "test",
         "migrate", "migration-new", "gen-apiclient", "check"
     )]
-    [string]$Target,
+    [string]$Target = "dev",
 
     [Parameter(Position = 1, Mandatory = $false)]
     [string]$Name = ""
@@ -31,21 +31,87 @@ function Run-Step([string]$Description, [scriptblock]$Action) {
     }
 }
 
+function Get-ApiPort {
+    if ($env:API_PORT) {
+        return $env:API_PORT
+    }
+    # Check if .env defines API_PORT
+    $envFile = "$RepoRoot\.env"
+    if (Test-Path $envFile) {
+        $match = Select-String -Path $envFile -Pattern "^API_PORT\s*=\s*(\d+)"
+        if ($match) {
+            return $match.Matches[0].Groups[1].Value
+        }
+    }
+    return "8000"
+}
+
 switch ($Target) {
-    "up" {
-        Run-Step "Starting Docker Compose services" { docker compose up -d }
-    }
-    "down" {
-        Run-Step "Stopping Docker Compose services" { docker compose down }
-    }
-    "logs" {
-        Run-Step "Following Docker Compose logs" { docker compose logs -f }
+    "dev" {
+        $ErrorActionPreference = "Continue"
+        $ApiPort = Get-ApiPort
+        Write-Host "==> Starting ModelFit local stack (API on port $ApiPort, Web on port 3000)..." -ForegroundColor Green
+        Write-Host "Press Ctrl+C to stop all services." -ForegroundColor Yellow
+
+        $apiJob = Start-Job -ScriptBlock {
+            param($root, $port)
+            Set-Location "$root\apps\api"
+            cmd.exe /c "uv run uvicorn modelfit.main:app --reload --port $port 2>&1"
+            if ($LASTEXITCODE -ne 0) {
+                exit $LASTEXITCODE
+            }
+        } -ArgumentList $RepoRoot, $ApiPort
+
+        $webJob = Start-Job -ScriptBlock {
+            param($root)
+            Set-Location "$root\apps\web"
+            cmd.exe /c "npm run dev 2>&1"
+            if ($LASTEXITCODE -ne 0) {
+                exit $LASTEXITCODE
+            }
+        } -ArgumentList $RepoRoot
+
+        try {
+            while ($true) {
+                Receive-Job -Job $apiJob -ErrorAction SilentlyContinue | ForEach-Object {
+                    Write-Host "[API] $_" -ForegroundColor Cyan
+                }
+                Receive-Job -Job $webJob -ErrorAction SilentlyContinue | ForEach-Object {
+                    Write-Host "[WEB] $_" -ForegroundColor Magenta
+                }
+
+                # Check if API service unexpectedly stopped
+                if ($apiJob.State -ne "Running") {
+                    Receive-Job -Job $apiJob -ErrorAction SilentlyContinue | ForEach-Object {
+                        Write-Host "[API] $_" -ForegroundColor Cyan
+                    }
+                    Write-Host "[API] Service stopped unexpectedly (Job state: $($apiJob.State))." -ForegroundColor Red
+                    break
+                }
+
+                # Check if Web service unexpectedly stopped
+                if ($webJob.State -ne "Running") {
+                    Receive-Job -Job $webJob -ErrorAction SilentlyContinue | ForEach-Object {
+                        Write-Host "[WEB] $_" -ForegroundColor Magenta
+                    }
+                    Write-Host "[WEB] Service stopped unexpectedly (Job state: $($webJob.State))." -ForegroundColor Red
+                    break
+                }
+
+                Start-Sleep -Milliseconds 250
+            }
+        } finally {
+            Write-Host "Stopping development jobs..." -ForegroundColor Yellow
+            Stop-Job -Job $apiJob, $webJob -ErrorAction SilentlyContinue
+            Remove-Job -Job $apiJob, $webJob -ErrorAction SilentlyContinue
+        }
     }
     "dev-api" {
-        Run-Step "Starting FastAPI backend development server" {
+        $ApiPort = Get-ApiPort
+        Run-Step "Starting FastAPI backend development server on port $ApiPort" {
             Push-Location "$RepoRoot\apps\api"
             try {
-                uv run uvicorn modelfit.main:app --reload --port 8000
+                cmd.exe /c "uv run uvicorn modelfit.main:app --reload --port $ApiPort"
             } finally {
                 Pop-Location
             }
@@ -55,7 +121,7 @@ switch ($Target) {
         Run-Step "Starting Next.js frontend development server" {
             Push-Location "$RepoRoot\apps\web"
             try {
-                npm run dev
+                cmd.exe /c "npm run dev"
             } finally {
                 Pop-Location
             }
@@ -88,7 +154,7 @@ switch ($Target) {
         }
         Run-Step "Typechecking frontend (tsc)" {
             Push-Location "$RepoRoot\apps\web"
-            try { npm run typecheck } finally { Pop-Location }
+            try { npx tsc --noEmit } finally { Pop-Location }
         }
     }
     "test" {
@@ -127,10 +193,8 @@ switch ($Target) {
         }
     }
     "check" {
-        Run-Step "Checking lint, types, and tests" {
-            & $PSCommandPath lint
-            & $PSCommandPath typecheck
-            & $PSCommandPath test
+        Run-Step "Running all checks via scripts/check.ps1" {
+            & "$PSScriptRoot\check.ps1"
         }
     }
 }

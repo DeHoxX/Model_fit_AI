@@ -141,11 +141,7 @@ def classify_model_support(
             "State-space / Mamba architectures are not currently supported.",
         )
 
-    if (
-        "deepseekv2" in arch_lower
-        or "deepseek_v2" in model_type
-        or "kv_lora_rank" in raw_config
-    ):
+    if "deepseekv2" in arch_lower or "deepseek_v2" in model_type or "kv_lora_rank" in raw_config:
         return (
             SupportStatus.UNSUPPORTED_ARCHITECTURE,
             "UNSUPPORTED_ARCHITECTURE",

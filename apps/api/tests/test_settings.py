@@ -10,6 +10,7 @@ def test_default_settings() -> None:
     settings = Settings()
     assert settings.APP_ENV in ["development", "test", "production"]
     assert len(settings.cors_origin_list) >= 1
+    assert settings.API_PORT == 8000
 
 
 def test_production_rejects_wildcard_cors() -> None:
@@ -43,7 +44,8 @@ def test_settings_loads_root_env_from_apps_api_cwd(monkeypatch: pytest.MonkeyPat
         monkeypatch.delenv("DATABASE_URL", raising=False)
         monkeypatch.delenv("APP_ENV", raising=False)
         settings = Settings()
-        assert "modelfit_dev_password" in settings.DATABASE_URL
+        assert "sqlite+aiosqlite:" in settings.DATABASE_URL
+        assert "modelfit.db" in settings.DATABASE_URL
 
 
 def test_llm_api_keys_trim_dedup_and_fallback() -> None:
@@ -96,3 +98,95 @@ def test_llm_settings_fail_fast_validation() -> None:
             LLM_MODEL="gemini-2.5-flash",
         )
     assert "LLM_API_KEY is required" in str(exc.value)
+
+
+def test_llm_credentials_validation_matrix_in_development() -> None:
+    """Verifies provider-aware credential rules in APP_ENV=development.
+
+    Matrix:
+    - groq with only LLM_API_KEYS passes
+    - groq with only LLM_API_KEY passes
+    - groq with neither fails
+    - gemini with only LLM_API_KEYS fails
+    - gemini with LLM_API_KEY passes
+    """
+    # 1. groq with only LLM_API_KEYS passes
+    s_groq_keys = Settings(
+        APP_ENV="development",
+        LLM_PROVIDER="groq",
+        LLM_API_KEYS="gsk_key_1, gsk_key_2",
+        LLM_API_KEY=None,
+        LLM_MODEL="llama-3.3-70b-versatile",
+    )
+    assert len(s_groq_keys.llm_api_key_list) == 2
+    s_groq_keys.validate_llm_credentials()
+
+    # 2. groq with only LLM_API_KEY passes
+    s_groq_single = Settings(
+        APP_ENV="development",
+        LLM_PROVIDER="groq",
+        LLM_API_KEYS=None,
+        LLM_API_KEY="gsk_single_key",
+        LLM_MODEL="llama-3.3-70b-versatile",
+    )
+    assert len(s_groq_single.llm_api_key_list) == 1
+    s_groq_single.validate_llm_credentials()
+
+    # 3. groq with neither fails
+    with pytest.raises(ValidationError) as exc_groq_none:
+        Settings(
+            APP_ENV="development",
+            LLM_PROVIDER="groq",
+            LLM_API_KEYS=None,
+            LLM_API_KEY=None,
+            LLM_MODEL="llama-3.3-70b-versatile",
+        )
+    assert "At least one Groq API key is required" in str(exc_groq_none.value)
+
+    # 4. gemini with only LLM_API_KEYS fails
+    with pytest.raises(ValidationError) as exc_gemini_keys:
+        Settings(
+            APP_ENV="development",
+            LLM_PROVIDER="gemini",
+            LLM_API_KEYS="some_groq_key",
+            LLM_API_KEY=None,
+            LLM_MODEL="gemini-2.5-flash",
+        )
+    assert "LLM_API_KEY is required when LLM_PROVIDER=gemini" in str(exc_gemini_keys.value)
+
+    # 5. gemini with LLM_API_KEY passes
+    s_gemini = Settings(
+        APP_ENV="development",
+        LLM_PROVIDER="gemini",
+        LLM_API_KEYS=None,
+        LLM_API_KEY="valid_gemini_key",
+        LLM_MODEL="gemini-2.5-flash",
+    )
+    assert s_gemini.LLM_API_KEY == "valid_gemini_key"
+    s_gemini.validate_llm_credentials()
+
+
+@pytest.mark.asyncio
+async def test_main_lifespan_startup_validation_groq_with_api_keys(
+    monkeypatch: pytest.MonkeyPatch,
+    prepare_database: None,
+) -> None:
+    """Verifies that main.py lifespan startup accepts valid Groq config with LLM_API_KEYS."""
+    from modelfit.core.config import settings
+    from modelfit.main import create_app, lifespan
+    from tests.conftest import TestSessionLocal
+
+    # Mock settings to simulate development mode with Groq and LLM_API_KEYS
+    monkeypatch.setattr(settings, "APP_ENV", "development")
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "groq")
+    monkeypatch.setattr(settings, "LLM_API_KEYS", "gsk_key_1, gsk_key_2")
+    monkeypatch.setattr(settings, "LLM_API_KEY", None)
+    monkeypatch.setattr(settings, "LLM_MODEL", "llama-3.3-70b-versatile")
+
+    # Connect lifespan hardware seeding to the prepared test database
+    monkeypatch.setattr("modelfit.db.session.get_session_maker", lambda: TestSessionLocal)
+
+    app = create_app()
+    # The lifespan context manager should not raise any credential exception
+    async with lifespan(app):
+        pass

@@ -72,8 +72,7 @@ class HardwareService:
         if detail.support_status != SupportStatus.SUPPORTED_LLM:
             reason = detail.support_reason_code or "UNSUPPORTED_ARCHITECTURE"
             message = (
-                detail.support_reason_message
-                or "Model is not supported for memory estimation."
+                detail.support_reason_message or "Model is not supported for memory estimation."
             )
             return EstimationResult(
                 weights_bytes=0,

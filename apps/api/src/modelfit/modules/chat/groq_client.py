@@ -61,23 +61,23 @@ class GroqLLMClient(LLMClient):
             return None
         formatted = []
         for t in tools:
-            formatted.append({
-                "type": "function",
-                "function": {
-                    "name": t["name"],
-                    "description": t["description"],
-                    "parameters": t.get("parameters", {}),
-                },
-            })
+            formatted.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t["description"],
+                        "parameters": t.get("parameters", {}),
+                    },
+                }
+            )
         return formatted
 
     def _convert_contents(
         self, contents: list[dict[str, Any]], system_prompt: str
     ) -> list[dict[str, Any]]:
         """Converts multi-turn conversation buffer into OpenAI-compatible messages."""
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt}
-        ]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
 
         for c in contents:
             role = c.get("role", "user")
@@ -86,48 +86,58 @@ class GroqLLMClient(LLMClient):
                     tool_calls = []
                     for i, fc in enumerate(c["function_calls"]):
                         call_id = fc.get("call_id") or f"call_{i}"
-                        tool_calls.append({
-                            "id": call_id,
-                            "type": "function",
-                            "function": {
-                                "name": fc["name"],
-                                "arguments": (
-                                    json.dumps(fc.get("args", {}))
-                                    if isinstance(fc.get("args"), dict)
-                                    else str(fc.get("args", "{}"))
-                                ),
-                            },
-                        })
-                    messages.append({
-                        "role": "assistant",
-                        "content": c.get("content") or None,
-                        "tool_calls": tool_calls,
-                    })
+                        tool_calls.append(
+                            {
+                                "id": call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": fc["name"],
+                                    "arguments": (
+                                        json.dumps(fc.get("args", {}))
+                                        if isinstance(fc.get("args"), dict)
+                                        else str(fc.get("args", "{}"))
+                                    ),
+                                },
+                            }
+                        )
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": c.get("content") or None,
+                            "tool_calls": tool_calls,
+                        }
+                    )
                 else:
-                    messages.append({
-                        "role": "assistant",
-                        "content": c.get("content") or "",
-                    })
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": c.get("content") or "",
+                        }
+                    )
             else:
                 # User turn or tool return turn
                 if c.get("function_responses"):
                     for i, fr in enumerate(c["function_responses"]):
                         call_id = fr.get("call_id") or f"call_{i}"
                         resp_content = fr.get("response", {})
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": call_id,
-                            "content": (
-                                json.dumps(resp_content)
-                                if not isinstance(resp_content, str)
-                                else resp_content
-                            ),
-                        })
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call_id,
+                                "content": (
+                                    json.dumps(resp_content)
+                                    if not isinstance(resp_content, str)
+                                    else resp_content
+                                ),
+                            }
+                        )
                 else:
-                    messages.append({
-                        "role": "user",
-                        "content": c.get("content") or "",
-                    })
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": c.get("content") or "",
+                        }
+                    )
 
         return messages
 
@@ -181,8 +191,7 @@ class GroqLLMClient(LLMClient):
                 raise AppError(
                     code="LLM_RATE_LIMITED",
                     message=(
-                        "The upstream AI service is temporarily rate limited. "
-                        "Please wait a moment."
+                        "The upstream AI service is temporarily rate limited. Please wait a moment."
                     ),
                     details={"wait_seconds": e.wait_seconds},
                 ) from e
@@ -238,148 +247,148 @@ class GroqLLMClient(LLMClient):
                             )
                         continue
 
-                        # Check 429 Rate Limit
-                        if status == 429:
-                            retry_after = parse_retry_after(response.headers.get("Retry-After"))
-                            await self.key_pool.report_429(key_index, retry_after)
-                            rate_limited_keys_this_turn.add(key_index)
+                    # Check 429 Rate Limit
+                    if status == 429:
+                        retry_after = parse_retry_after(response.headers.get("Retry-After"))
+                        await self.key_pool.report_429(key_index, retry_after)
+                        rate_limited_keys_this_turn.add(key_index)
 
-                            # If two different keys return 429 in the same turn, stop rotating
-                            if len(rate_limited_keys_this_turn) >= 2:
-                                logger.warning(
-                                    "groq_multiple_keys_rate_limited",
-                                    count=len(rate_limited_keys_this_turn),
-                                )
-                                raise AppError(
-                                    code="LLM_RATE_LIMITED",
-                                    message=(
-                                        "The upstream AI service is temporarily rate limited. "
-                                        "Please wait a moment."
-                                    ),
-                                    details={"wait_seconds": retry_after or 10.0},
-                                )
-
-                            key_failovers += 1
-                            if key_failovers >= min(self.key_pool.total_keys, MAX_KEY_FAILOVERS):
-                                raise AppError(
-                                    code="LLM_RATE_LIMITED",
-                                    message=(
-                                        "The upstream AI service is temporarily rate limited. "
-                                        "Please wait a moment."
-                                    ),
-                                    details={"wait_seconds": retry_after or 10.0},
-                                )
-                            continue
-
-                        # Check 503 or 500 transient errors
-                        if status in [500, 502, 503, 504]:
-                            transient_retries += 1
+                        # If two different keys return 429 in the same turn, stop rotating
+                        if len(rate_limited_keys_this_turn) >= 2:
                             logger.warning(
-                                "groq_transient_error",
-                                status_code=status,
-                                retry_count=transient_retries,
-                            )
-                            if transient_retries > MAX_TRANSIENT_RETRIES:
-                                raise AppError(
-                                    code="LLM_MODEL_BUSY",
-                                    message=(
-                                        "The AI model is currently busy with high demand. "
-                                        "Please retry your request in a moment."
-                                    ),
-                                )
-                            await asyncio.sleep(TRANSIENT_BACKOFF_SECONDS * transient_retries)
-                            continue
-
-                        # If other non-200 error
-                        if status != 200:
-                            err_body = await response.aread()
-                            # Redact any secret key from log output
-                            err_text = err_body.decode(errors="replace")
-                            for k in settings.llm_api_key_list:
-                                err_text = err_text.replace(k.get_secret_value(), "[REDACTED]")
-                            logger.error(
-                                "groq_api_unexpected_status",
-                                status_code=status,
-                                error_text=err_text[:200],
+                                "groq_multiple_keys_rate_limited",
+                                count=len(rate_limited_keys_this_turn),
                             )
                             raise AppError(
-                                code=f"LLM_HTTP_{status}",
-                                message=f"Upstream inference returned status {status}.",
+                                code="LLM_RATE_LIMITED",
+                                message=(
+                                    "The upstream AI service is temporarily rate limited. "
+                                    "Please wait a moment."
+                                ),
+                                details={"wait_seconds": retry_after or 10.0},
                             )
 
-                        # Response status is 200: stream SSE chunks
-                        tool_calls_accumulator: dict[int, dict[str, Any]] = {}
+                        key_failovers += 1
+                        if key_failovers >= min(self.key_pool.total_keys, MAX_KEY_FAILOVERS):
+                            raise AppError(
+                                code="LLM_RATE_LIMITED",
+                                message=(
+                                    "The upstream AI service is temporarily rate limited. "
+                                    "Please wait a moment."
+                                ),
+                                details={"wait_seconds": retry_after or 10.0},
+                            )
+                        continue
 
-                        async for line in response.aiter_lines():
-                            if not line:
+                    # Check 503 or 500 transient errors
+                    if status in [500, 502, 503, 504]:
+                        transient_retries += 1
+                        logger.warning(
+                            "groq_transient_error",
+                            status_code=status,
+                            retry_count=transient_retries,
+                        )
+                        if transient_retries > MAX_TRANSIENT_RETRIES:
+                            raise AppError(
+                                code="LLM_MODEL_BUSY",
+                                message=(
+                                    "The AI model is currently busy with high demand. "
+                                    "Please retry your request in a moment."
+                                ),
+                            )
+                        await asyncio.sleep(TRANSIENT_BACKOFF_SECONDS * transient_retries)
+                        continue
+
+                    # If other non-200 error
+                    if status != 200:
+                        err_body = await response.aread()
+                        # Redact any secret key from log output
+                        err_text = err_body.decode(errors="replace")
+                        for k in settings.llm_api_key_list:
+                            err_text = err_text.replace(k.get_secret_value(), "[REDACTED]")
+                        logger.error(
+                            "groq_api_unexpected_status",
+                            status_code=status,
+                            error_text=err_text[:200],
+                        )
+                        raise AppError(
+                            code=f"LLM_HTTP_{status}",
+                            message=f"Upstream inference returned status {status}.",
+                        )
+
+                    # Response status is 200: stream SSE chunks
+                    tool_calls_accumulator: dict[int, dict[str, Any]] = {}
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        if line.startswith("data: "):
+                            data_str = line[6:].strip()
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                chunk_json = json.loads(data_str)
+                            except json.JSONDecodeError:
                                 continue
-                            if line.startswith("data: "):
-                                data_str = line[6:].strip()
-                                if data_str == "[DONE]":
-                                    break
-                                try:
-                                    chunk_json = json.loads(data_str)
-                                except json.JSONDecodeError:
-                                    continue
 
-                                choices = chunk_json.get("choices")
-                                if not choices:
-                                    continue
-                                delta = choices[0].get("delta", {})
+                            choices = chunk_json.get("choices")
+                            if not choices:
+                                continue
+                            delta = choices[0].get("delta", {})
 
-                                # Filter out any reasoning field emitted by reasoning models
-                                # (e.g. delta.reasoning or delta.reasoning_content)
-                                text_content = delta.get("content")
-                                if text_content:
-                                    has_yielded = True
-                                    yield StreamChunk(text=text_content)
+                            # Filter out any reasoning field emitted by reasoning models
+                            # (e.g. delta.reasoning or delta.reasoning_content)
+                            text_content = delta.get("content")
+                            if text_content:
+                                has_yielded = True
+                                yield StreamChunk(text=text_content)
 
-                                # Accumulate streaming tool calls
-                                tc_deltas = delta.get("tool_calls")
-                                if tc_deltas:
-                                    has_yielded = True
-                                    for tc_delta in tc_deltas:
-                                        idx = tc_delta.get("index", 0)
-                                        if idx not in tool_calls_accumulator:
-                                            tool_calls_accumulator[idx] = {
-                                                "id": tc_delta.get("id") or f"call_{idx}",
-                                                "name": "",
-                                                "arguments": "",
-                                            }
-                                        if tc_delta.get("id"):
-                                            tool_calls_accumulator[idx]["id"] = tc_delta["id"]
-                                        func_info = tc_delta.get("function", {})
-                                        if func_info.get("name"):
-                                            tool_calls_accumulator[idx]["name"] += func_info["name"]
-                                        if func_info.get("arguments"):
-                                            tool_calls_accumulator[idx]["arguments"] += (
-                                                func_info["arguments"]
-                                            )
+                            # Accumulate streaming tool calls
+                            tc_deltas = delta.get("tool_calls")
+                            if tc_deltas:
+                                has_yielded = True
+                                for tc_delta in tc_deltas:
+                                    idx = tc_delta.get("index", 0)
+                                    if idx not in tool_calls_accumulator:
+                                        tool_calls_accumulator[idx] = {
+                                            "id": tc_delta.get("id") or f"call_{idx}",
+                                            "name": "",
+                                            "arguments": "",
+                                        }
+                                    if tc_delta.get("id"):
+                                        tool_calls_accumulator[idx]["id"] = tc_delta["id"]
+                                    func_info = tc_delta.get("function", {})
+                                    if func_info.get("name"):
+                                        tool_calls_accumulator[idx]["name"] += func_info["name"]
+                                    if func_info.get("arguments"):
+                                        tool_calls_accumulator[idx]["arguments"] += func_info[
+                                            "arguments"
+                                        ]
 
-                        # Stream finished successfully: yield any completed tool calls
-                        if tool_calls_accumulator:
-                            fcalls: list[FunctionCallInfo] = []
-                            for idx in sorted(tool_calls_accumulator.keys()):
-                                item = tool_calls_accumulator[idx]
-                                name = item["name"]
-                                raw_args = item["arguments"]
-                                call_id = item["id"]
-                                try:
-                                    args_dict = json.loads(raw_args) if raw_args.strip() else {}
-                                    if not isinstance(args_dict, dict):
-                                        args_dict = {"_raw_argument": args_dict}
-                                except json.JSONDecodeError:
-                                    args_dict = {"_malformed_arguments": raw_args}
-                                fcalls.append(
-                                    FunctionCallInfo(
-                                        name=name,
-                                        args=args_dict,
-                                        call_id=call_id,
-                                    )
+                    # Stream finished successfully: yield any completed tool calls
+                    if tool_calls_accumulator:
+                        fcalls: list[FunctionCallInfo] = []
+                        for idx in sorted(tool_calls_accumulator.keys()):
+                            item = tool_calls_accumulator[idx]
+                            name = item["name"]
+                            raw_args = item["arguments"]
+                            call_id = item["id"]
+                            try:
+                                args_dict = json.loads(raw_args) if raw_args.strip() else {}
+                                if not isinstance(args_dict, dict):
+                                    args_dict = {"_raw_argument": args_dict}
+                            except json.JSONDecodeError:
+                                args_dict = {"_malformed_arguments": raw_args}
+                            fcalls.append(
+                                FunctionCallInfo(
+                                    name=name,
+                                    args=args_dict,
+                                    call_id=call_id,
                                 )
-                            yield StreamChunk(function_calls=fcalls)
+                            )
+                        yield StreamChunk(function_calls=fcalls)
 
-                        return
+                    return
 
             except (
                 httpx.ConnectTimeout,

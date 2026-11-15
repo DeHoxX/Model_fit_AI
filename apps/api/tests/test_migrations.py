@@ -26,7 +26,6 @@ def test_alembic_revision_chain() -> None:
     assert license_rev is not None
     assert license_rev.down_revision == "0003_model_cache"
 
-
     cache_rev = script.get_revision("0003_model_cache")
     assert cache_rev is not None
     assert cache_rev.down_revision == "0002_hardware_profiles"

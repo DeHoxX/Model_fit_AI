@@ -6,8 +6,7 @@ ModelFit is designed with strict boundaries, separation of concerns, and guarant
 ```mermaid
 graph TD
     User["User Browser"] -->|HTTP / :3000| Web["Next.js Web Frontend"]
-    Web -->|Rewrites /api/*| Caddy["Caddy Gateway / Reverse Proxy"]
-    Caddy -->|/api/v1/*| API["FastAPI Application"]
+    Web -->|API Proxy /api/v1/*| API["FastAPI Application (:8000)"]
     
     subgraph "API Core & Modules"
         API --> Middleware["RequestID & Security Headers Middleware"]
@@ -21,7 +20,7 @@ graph TD
     end
     
     subgraph "Storage"
-        API --> DB[(PostgreSQL 16)]
+        API --> DB[(SQLite 3 - aiosqlite)]
     end
 ```
 

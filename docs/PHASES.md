@@ -230,3 +230,24 @@
 
 
 
+
+
+---
+
+## Phase B Execution Summary: Local SQLite Migration & Docker Elimination
+
+### Architecture Modernization
+1. **Database Engine Transition**:
+   - Replaced PostgreSQL 16 and `asyncpg` with embedded SQLite 3 and `aiosqlite`.
+   - Single local database `modelfit.db` (git-ignored), configurable via `DATABASE_URL`.
+   - Idempotent seeding of hardware profiles retained; cache persistence retained.
+2. **Deterministic Time & Identity**:
+   - Replaced database-specific `gen_random_uuid()` server defaults with Python-side `uuid.uuid4()` via standard `sqlalchemy.types.Uuid(as_uuid=True)`.
+   - Replaced `server_default=func.now()` with Python-side timezone-aware UTC datetime generation (`UTCDateTime` TypeDecorator and `utc_now`).
+3. **Alembic Batch Mode & Dialect Awareness**:
+   - Configured `render_as_batch=True` in `alembic/env.py`.
+   - Migration 0005 incorporates dialect-aware cache expiration updates (`datetime('now', '-1 second')` on SQLite).
+4. **Complete Docker Elimination**:
+   - Deleted all Dockerfiles, compose files, and Caddy container assets.
+   - Simplified CI workflow to run directly without database service containers.
+   - Created `scripts/dev.ps1` for one-command local orchestration (API + Web) and `scripts/check.ps1` for local quality gating.

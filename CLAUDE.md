@@ -43,31 +43,31 @@ reference measurements. Look them up from official sources or mark them
 TODO(verify) and list them in the final report.
 13. Speed (tokens per second) and benchmark claims are out of scope. Never
 display or generate performance numbers.
+14. Every decision (what + why + alternatives) must be added as a new D-NNN
+entry in docs/DECISIONS.md in the same change that makes it.
 
 ## Tech stack (current stable releases, pinned in lockfiles, verified not guessed)
 Frontend: Next.js (App Router), React, TypeScript strict, Tailwind CSS,
 shadcn/ui, TanStack Query, React Hook Form with Zod, openapi-typescript,
 Vitest, Testing Library, Playwright.
 Backend: Python 3.12+, FastAPI, Pydantic v2 with pydantic-settings,
-SQLAlchemy 2.x async with asyncpg, Alembic, huggingface_hub, httpx,
+SQLAlchemy 2.x async with aiosqlite, Alembic, huggingface_hub, httpx,
 structlog, pytest, pytest-asyncio, respx, hypothesis, ruff, mypy strict,
 import-linter. LLM access through the official Google GenAI SDK (google-genai)
 behind a small, provider-neutral LLMClient interface configured via
 LLM_PROVIDER, LLM_API_KEY, and LLM_MODEL (with no hardcoded model default).
-Data: PostgreSQL 16+. No Redis.
-Infra: Docker (multi-stage, non-root), Docker Compose, Caddy, GitHub Actions.
+Data: SQLite 3 via SQLAlchemy async + aiosqlite. No Redis.
+Infra: GitHub Actions, local processes.
 Package managers: uv and pnpm.
 
 ## Repository layout
 modelfit/
 CLAUDE.md AGENTS.md README.md Makefile .env.example
-docker-compose.yml docker-compose.prod.yml
 apps/api/ (pyproject.toml, alembic/, src/modelfit/{main.py, core/, db/,
 modules/{health,catalog,estimator,configs,chat,recommend,admin}/}, tests/)
 apps/web/ (src/app, src/components, src/lib, src/api generated client,
 tests/)
-infra/    (Caddyfile, backup script, deploy notes)
-docs/     (ARCHITECTURE.md PHASES.md DECISIONS.md API.md RUNBOOK.md)
+docs/     (ARCHITECTURE.md PHASES.md DECISIONS.md API.md WINDOWS.md)
 .github/workflows/
 
 ## Architecture conventions
@@ -93,9 +93,9 @@ accessible and responsive from 360px, light and dark themes.
 - Git: Conventional Commits, small commits, one branch per phase.
 
 ## Testing policy
-- Backend: unit tests for pure logic; integration tests against real Postgres
-in Docker (no DB mocking); external HTTP (Hugging Face, LLM) mocked at the
-HTTP boundary with respx and recorded fixtures.
+- Backend: unit tests for pure logic; integration tests against SQLite;
+external HTTP (Hugging Face, LLM) mocked at the HTTP boundary with respx
+and recorded fixtures.
 - Coverage gates: estimator at least 95 percent, backend overall at least 80
 percent.
 - Frontend: Vitest with MSW, and Playwright for critical journeys.

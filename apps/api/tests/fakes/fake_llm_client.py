@@ -29,11 +29,13 @@ class FakeScriptedLLMClient:
         system_prompt: str,
         tools: list[Any] | None = None,
     ) -> AsyncIterator[StreamChunk]:
-        self.call_history.append({
-            "contents": [dict(c) for c in contents],
-            "system_prompt": system_prompt,
-            "tools": tools,
-        })
+        self.call_history.append(
+            {
+                "contents": [dict(c) for c in contents],
+                "system_prompt": system_prompt,
+                "tools": tools,
+            }
+        )
         if not self.script:
             yield StreamChunk(text="Default scripted fallback response.")
             return

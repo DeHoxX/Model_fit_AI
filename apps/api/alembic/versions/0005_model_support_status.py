@@ -5,6 +5,7 @@ Revises: 0004_add_model_cache_license
 Create Date: 2026-10-23 00:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -19,39 +20,42 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "model_cache",
-        sa.Column(
-            "support_status",
-            sa.String(length=50),
-            server_default="supported_llm",
-            nullable=False,
-        ),
-    )
-    op.add_column(
-        "model_cache",
-        sa.Column(
-            "support_reason_code",
-            sa.String(length=50),
-            nullable=True,
-        ),
-    )
-    op.add_column(
-        "model_cache",
-        sa.Column(
-            "support_reason_message",
-            sa.Text(),
-            nullable=True,
-        ),
-    )
+    with op.batch_alter_table("model_cache") as batch_op:
+        batch_op.add_column(
+            sa.Column(
+                "support_status",
+                sa.String(length=50),
+                server_default="supported_llm",
+                nullable=False,
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "support_reason_code",
+                sa.String(length=50),
+                nullable=True,
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "support_reason_message",
+                sa.Text(),
+                nullable=True,
+            )
+        )
 
-    # Backfill strategy: expire all cached rows so that they are re-classified
+    # Dialect-aware backfill strategy: expire all cached rows so that they are re-classified
     # with the deterministic classifier upon next access, ensuring any existing
     # non-decoder models are re-evaluated and not left with an inaccurate default.
-    op.execute("UPDATE model_cache SET expires_at = NOW() - INTERVAL '1 second'")
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        op.execute("UPDATE model_cache SET expires_at = datetime('now', '-1 second')")
+    else:
+        op.execute("UPDATE model_cache SET expires_at = NOW() - INTERVAL '1 second'")
 
 
 def downgrade() -> None:
-    op.drop_column("model_cache", "support_reason_message")
-    op.drop_column("model_cache", "support_reason_code")
-    op.drop_column("model_cache", "support_status")
+    with op.batch_alter_table("model_cache") as batch_op:
+        batch_op.drop_column("support_reason_message")
+        batch_op.drop_column("support_reason_code")
+        batch_op.drop_column("support_status")

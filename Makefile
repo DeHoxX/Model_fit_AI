@@ -1,16 +1,7 @@
-.PHONY: up down logs dev-api dev-web lint format typecheck test migrate migration-new gen-apiclient check
-
-up:
-	docker compose up -d
-
-down:
-	docker compose down
-
-logs:
-	docker compose logs -f
+.PHONY: dev-api dev-web lint format typecheck test migrate migration-new gen-apiclient check
 
 dev-api:
-	cd apps/api && uv run uvicorn modelfit.main:app --reload --port 8000
+	cd apps/api && uv run uvicorn modelfit.main:app --reload --port $(or $(API_PORT),8000)
 
 dev-web:
 	cd apps/web && npm run dev

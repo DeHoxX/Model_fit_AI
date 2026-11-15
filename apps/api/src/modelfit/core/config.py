@@ -13,8 +13,9 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     GIT_SHA: str = "development"
     LOG_LEVEL: str = "INFO"
+    API_PORT: int = 8000
 
-    DATABASE_URL: str = "postgresql+asyncpg://modelfit:modelfit@localhost:5432/modelfit"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./modelfit.db"
     TEST_DATABASE_URL: str | None = None
 
     # Comma-separated or list of allowed origins
@@ -58,6 +59,24 @@ class Settings(BaseSettings):
                 keys.append(SecretStr(k))
         return keys
 
+    def validate_llm_credentials(self) -> None:
+        """Validates that required LLM provider credentials and model are configured."""
+        if not self.LLM_MODEL:
+            raise ValueError(
+                "LLM_MODEL is required in development and production modes. "
+                "Please configure LLM_MODEL in your environment."
+            )
+        if self.LLM_PROVIDER == "groq" and len(self.llm_api_key_list) == 0:
+            raise ValueError(
+                "At least one Groq API key is required when LLM_PROVIDER=groq. "
+                "Please configure LLM_API_KEYS or LLM_API_KEY in your environment."
+            )
+        if self.LLM_PROVIDER == "gemini" and not self.LLM_API_KEY:
+            raise ValueError(
+                "LLM_API_KEY is required when LLM_PROVIDER=gemini. "
+                "Please configure LLM_API_KEY in your environment."
+            )
+
     @model_validator(mode="after")
     def validate_settings(self) -> "Settings":
         """In production, CORS_ORIGINS must never contain a wildcard."""
@@ -68,21 +87,7 @@ class Settings(BaseSettings):
 
         # In dev and prod, fail fast if LLM provider has no keys or no model
         if self.APP_ENV != "test":
-            if not self.LLM_MODEL:
-                raise ValueError(
-                    "LLM_MODEL is required in development and production modes. "
-                    "Please configure LLM_MODEL in your environment."
-                )
-            if self.LLM_PROVIDER == "groq" and len(self.llm_api_key_list) == 0:
-                raise ValueError(
-                    "At least one Groq API key is required when LLM_PROVIDER=groq. "
-                    "Please configure LLM_API_KEYS or LLM_API_KEY in your environment."
-                )
-            if self.LLM_PROVIDER == "gemini" and not self.LLM_API_KEY:
-                raise ValueError(
-                    "LLM_API_KEY is required when LLM_PROVIDER=gemini. "
-                    "Please configure LLM_API_KEY in your environment."
-                )
+            self.validate_llm_credentials()
         return self
 
     @property

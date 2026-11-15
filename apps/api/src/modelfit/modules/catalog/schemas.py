@@ -67,4 +67,3 @@ class ModelDetailResponse(BaseModel):
 
     normalized_model: NormalizedModel
     warning: str | None = None
-

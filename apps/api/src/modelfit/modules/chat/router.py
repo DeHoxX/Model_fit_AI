@@ -57,15 +57,17 @@ async def chat_completions(
                 data_str = json.dumps(event.data)
                 yield f"event: {event.event}\ndata: {data_str}\n\n"
         except Exception:
-            err_payload = json.dumps({
-                "error": {
-                    "code": "INTERNAL_STREAM_ERROR",
-                    "message": (
-                        "An error occurred while communicating with the AI service. "
-                        "Please retry."
-                    ),
+            err_payload = json.dumps(
+                {
+                    "error": {
+                        "code": "INTERNAL_STREAM_ERROR",
+                        "message": (
+                            "An error occurred while communicating with the AI service. "
+                            "Please retry."
+                        ),
+                    }
                 }
-            })
+            )
             yield f"event: error\ndata: {err_payload}\n\n"
             yield "event: done\ndata: {}\n\n"
 

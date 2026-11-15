@@ -10,20 +10,6 @@ jobs:
   api:
     name: Backend CI
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: modelfit
-          POSTGRES_PASSWORD: modelfit_test_password
-          POSTGRES_DB: modelfit_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/api
-        run: uv sync
+        run: uv sync --extra dev
 
       - name: Lint with ruff
         working-directory: apps/api
@@ -61,7 +47,7 @@ jobs:
       - name: Run migrations check (upgrade, downgrade, upgrade)
         working-directory: apps/api
         env:
-          DATABASE_URL: postgresql+asyncpg://modelfit:modelfit_test_password@localhost:5432/modelfit_test
+          DATABASE_URL: sqlite+aiosqlite:///./ci_test.db
         run: |
           uv run alembic upgrade head
           uv run alembic downgrade base
@@ -71,8 +57,8 @@ jobs:
         working-directory: apps/api
         env:
           APP_ENV: test
-          DATABASE_URL: postgresql+asyncpg://modelfit:modelfit_test_password@localhost:5432/modelfit_test
-          TEST_DATABASE_URL: postgresql+asyncpg://modelfit:modelfit_test_password@localhost:5432/modelfit_test
+          DATABASE_URL: sqlite+aiosqlite:///./ci_test.db
+          TEST_DATABASE_URL: sqlite+aiosqlite:///./ci_scratch_test.db
           CORS_ORIGINS: http://localhost:3000
         run: uv run pytest --cov=src/modelfit --cov-report=term-missing --cov-fail-under=80 -v
 

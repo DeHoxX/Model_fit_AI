@@ -120,7 +120,7 @@ export default function StatusPage() {
                 <CheckCircle2 className="w-6 h-6 text-[#7be0a4]" />
                 <div>
                   <h3 className="font-semibold text-white">All Systems Operational</h3>
-                  <p className="text-xs text-[#8ca89d]">FastAPI backend and PostgreSQL database are healthy.</p>
+                  <p className="text-xs text-[#8ca89d]">FastAPI backend and database are healthy.</p>
                 </div>
               </div>
               <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[#2a563e]/60 text-[#7be0a4] border border-[#3e7d5b]">

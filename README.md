@@ -9,7 +9,6 @@ Designed with ChatGPT's minimal conversational advisor aesthetic and a dark pine
 ## 1. Prerequisites
 - **Python**: 3.12+ (managed with `uv`)
 - **Node.js**: 22+ (with `npm` or `pnpm`)
-- **Docker & Docker Compose**: v2.20+ (for containers and production Caddy)
 - **Git**: 2.40+
 
 ---
@@ -48,8 +47,6 @@ Open [http://localhost:3000](http://localhost:3000) for the Advisor UI or [http:
 | `make dev-web` | Run Next.js web application locally with hot-reloading |
 | `make test` | Run backend pytest suite and frontend vitest suite |
 | `make check` | Run linter, type checks, and tests across backend and frontend |
-| `make up` | Start PostgreSQL and background services in Docker |
-| `make down` | Stop running containers |
 | `make migrate` | Run Alembic database migrations up to head |
 | `make gen-apiclient` | Deterministically export `openapi.json` and generate TypeScript client types |
 
@@ -60,7 +57,8 @@ Open [http://localhost:3000](http://localhost:3000) for the Advisor UI or [http:
 | Variable | Required | Default | Purpose |
 | :--- | :--- | :--- | :--- |
 | `APP_ENV` | Yes | `development` | Runtime environment (`development`, `test`, `production`). |
-| `DATABASE_URL` | Yes | `postgresql+asyncpg://...` | Connection URI for PostgreSQL with asyncpg driver. |
+| `API_PORT` | No | `8000` | Port for the FastAPI backend server. |
+| `DATABASE_URL` | Yes | `sqlite+aiosqlite:///./modelfit.db` | Connection URI for SQLite with aiosqlite driver. |
 | `CORS_ORIGINS` | Yes | `http://localhost:3000` | Allowed origins. Strict validation refuses wildcard `*` in production. |
 | `LOG_LEVEL` | No | `INFO` | Structlog level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
 | `APP_VERSION` | No | `1.0.0` | Application release version. |

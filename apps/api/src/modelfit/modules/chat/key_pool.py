@@ -91,9 +91,7 @@ class KeyPool:
 
             # 4. If no active key was found, all non-disabled keys must be cooling
             cooling_entries = [
-                e
-                for e in self._entries
-                if e.status == "cooling" and e.cooldown_until is not None
+                e for e in self._entries if e.status == "cooling" and e.cooldown_until is not None
             ]
             if cooling_entries:
                 shortest_wait = min(

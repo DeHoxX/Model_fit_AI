@@ -180,8 +180,10 @@ def get_llm_client() -> LLMClient:
     """
     if settings.APP_ENV == "test":
         from tests.fakes.fake_llm_client import FakeScriptedLLMClient
+
         return FakeScriptedLLMClient()
     if settings.LLM_PROVIDER == "groq":
         from modelfit.modules.chat.groq_client import GroqLLMClient
+
         return GroqLLMClient()
     return GeminiLLMClient()

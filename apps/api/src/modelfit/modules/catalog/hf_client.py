@@ -218,7 +218,6 @@ class HubClient:
             False,
         )
 
-
     async def inspect_safetensors_header(self, repo_id: str) -> int | None:
         """Fetches safetensors header metadata using HTTP Range requests.
 

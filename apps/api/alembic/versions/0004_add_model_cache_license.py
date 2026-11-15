@@ -20,11 +20,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "model_cache",
-        sa.Column("license", sa.String(length=100), nullable=True),
-    )
+    with op.batch_alter_table("model_cache") as batch_op:
+        batch_op.add_column(sa.Column("license", sa.String(length=100), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column("model_cache", "license")
+    with op.batch_alter_table("model_cache") as batch_op:
+        batch_op.drop_column("license")

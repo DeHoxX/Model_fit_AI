@@ -37,7 +37,6 @@ def normalize_hf_config(
     arch_str = architectures[0] if architectures else raw_config.get("model_type", "unknown")
     model_type = raw_config.get("model_type", "").lower()
 
-
     # 1. Determine Architecture Category
     if (
         "deepseekv2" in arch_str.lower()

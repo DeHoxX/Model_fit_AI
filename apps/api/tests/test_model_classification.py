@@ -118,7 +118,9 @@ async def test_missing_config_returns_200_incomplete_metadata(client: httpx.Asyn
             },
         )
         respx_mock.get(f"https://huggingface.co/{repo_id}/raw/main/config.json").respond(404)
-        respx_mock.get(f"https://huggingface.co/{repo_id}/resolve/main/model.safetensors").respond(404)
+        respx_mock.get(f"https://huggingface.co/{repo_id}/resolve/main/model.safetensors").respond(
+            404
+        )
 
         resp = await client.get(f"/api/v1/models/{repo_id}")
         assert resp.status_code == 200
@@ -155,7 +157,9 @@ async def test_estimate_unsupported_model_returns_cannot_estimate(
         respx_mock.get(f"https://huggingface.co/{repo_id}/raw/main/config.json").respond(
             200, json=BERT_CONFIG
         )
-        respx_mock.get(f"https://huggingface.co/{repo_id}/resolve/main/model.safetensors").respond(404)
+        respx_mock.get(f"https://huggingface.co/{repo_id}/resolve/main/model.safetensors").respond(
+            404
+        )
 
         payload = {
             "repo_id": repo_id,
@@ -219,7 +223,9 @@ async def test_architecture_classification(
         respx_mock.get(f"https://huggingface.co/{repo_id}/raw/main/config.json").respond(
             200, json=config
         )
-        respx_mock.get(f"https://huggingface.co/{repo_id}/resolve/main/model.safetensors").respond(404)
+        respx_mock.get(f"https://huggingface.co/{repo_id}/resolve/main/model.safetensors").respond(
+            404
+        )
 
         resp = await client.get(f"/api/v1/models/{repo_id}")
         assert resp.status_code == 200

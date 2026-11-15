@@ -369,4 +369,3 @@ async def test_list_models_with_pipeline_tag(client: httpx.AsyncClient) -> None:
         data = response.json()
         assert len(data["items"]) == 1
         assert data["items"][0]["pipeline_tag"] == "text-generation"
-

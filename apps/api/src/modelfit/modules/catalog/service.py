@@ -268,7 +268,7 @@ class CatalogService:
                 raw_config=config_dict,
                 config_missing=(config_dict is None),
             )
-            is_supported = (support_status == SupportStatus.SUPPORTED_LLM)
+            is_supported = support_status == SupportStatus.SUPPORTED_LLM
 
             # Normalize raw config into domain model
             normalized, provenance = normalize_hf_config(

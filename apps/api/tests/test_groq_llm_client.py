@@ -179,8 +179,7 @@ async def test_groq_401_disables_key_and_fails_over(sample_keys: list[SecretStr]
         if "gsk_key_zero_secret_123" in auth_header:
             return httpx.Response(401, text='{"error":{"message":"Invalid API Key"}}')
         sse_text = (
-            'data: {"choices":[{"delta":{"content":"Success with key 1"}}]}\n\n'
-            "data: [DONE]\n\n"
+            'data: {"choices":[{"delta":{"content":"Success with key 1"}}]}\n\ndata: [DONE]\n\n'
         )
         return httpx.Response(200, text=sse_text)
 
@@ -325,8 +324,7 @@ async def test_groq_single_key_transient_503_retry() -> None:
         if attempts == 1:
             return httpx.Response(503, text="Service Temporarily Unavailable")
         sse_text = (
-            'data: {"choices":[{"delta":{"content":"Recovered from 503"}}]}\n\n'
-            "data: [DONE]\n\n"
+            'data: {"choices":[{"delta":{"content":"Recovered from 503"}}]}\n\ndata: [DONE]\n\n'
         )
         return httpx.Response(200, text=sse_text)
 
@@ -360,8 +358,7 @@ async def test_groq_single_key_network_timeout_retry() -> None:
         if attempts == 1:
             raise httpx.ConnectTimeout("Connect timeout")
         sse_text = (
-            'data: {"choices":[{"delta":{"content":"Connected on attempt 2"}}]}\n\n'
-            "data: [DONE]\n\n"
+            'data: {"choices":[{"delta":{"content":"Connected on attempt 2"}}]}\n\ndata: [DONE]\n\n'
         )
         return httpx.Response(200, text=sse_text)
 
@@ -416,32 +413,36 @@ async def test_groq_tool_calling_round_trip(sample_keys: list[SecretStr]) -> Non
     client.model = "llama-3.3-70b-versatile"
 
     chunk1 = {
-        "choices": [{
-            "delta": {
-                "tool_calls": [{
-                    "index": 0,
-                    "id": "call_abc",
-                    "type": "function",
-                    "function": {"name": "estimate_memory", "arguments": '{"model_id": '},
-                }]
+        "choices": [
+            {
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "call_abc",
+                            "type": "function",
+                            "function": {"name": "estimate_memory", "arguments": '{"model_id": '},
+                        }
+                    ]
+                }
             }
-        }]
+        ]
     }
     chunk2 = {
-        "choices": [{
-            "delta": {
-                "tool_calls": [{
-                    "index": 0,
-                    "function": {"arguments": '"meta-llama/Llama-3-8B"}'},
-                }]
+        "choices": [
+            {
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "function": {"arguments": '"meta-llama/Llama-3-8B"}'},
+                        }
+                    ]
+                }
             }
-        }]
+        ]
     }
-    sse_data = (
-        f"data: {json.dumps(chunk1)}\n\n"
-        f"data: {json.dumps(chunk2)}\n\n"
-        "data: [DONE]\n\n"
-    )
+    sse_data = f"data: {json.dumps(chunk1)}\n\ndata: {json.dumps(chunk2)}\n\ndata: [DONE]\n\n"
     respx.post(CHAT_COMPLETIONS_ENDPOINT).mock(return_value=httpx.Response(200, text=sse_data))
 
     chunks = []

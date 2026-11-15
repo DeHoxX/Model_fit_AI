@@ -22,6 +22,7 @@ from modelfit.modules.recommend.service import RecommendService
 hub_call_count = 0
 original_request = httpx.AsyncClient.request
 
+
 async def instrumented_request(self, method, url, *args, **kwargs):
     global hub_call_count
     url_str = str(url)
@@ -30,7 +31,9 @@ async def instrumented_request(self, method, url, *args, **kwargs):
         print(f"  [HF Hub Call #{hub_call_count}] {method} {url_str[:85]}...")
     return await original_request(self, method, url, *args, **kwargs)
 
+
 httpx.AsyncClient.request = instrumented_request
+
 
 async def main():
     engine = create_async_engine(
@@ -41,7 +44,7 @@ async def main():
         await conn.run_sync(Base.metadata.create_all)
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    
+
     async with session_factory() as session:
         catalog_repo = CatalogRepository()
         catalog_service = CatalogService(repository=catalog_repo)
@@ -69,6 +72,7 @@ async def main():
         print(json.dumps(result_dict, indent=2))
 
     await engine.dispose()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

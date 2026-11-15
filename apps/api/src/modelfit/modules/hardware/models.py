@@ -11,14 +11,14 @@ class HardwareProfile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     kind: Mapped[str] = mapped_column(
-        String(30), nullable=False, default="gpu", server_default="gpu"
+        String(30), server_default="gpu", nullable=False, default="gpu"
     )
     memory_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     reserved_memory_bytes: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, default=0, server_default="0"
+        BigInteger, server_default="0", nullable=False, default=0
     )
     source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_verified: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=text("false")
+        Boolean, server_default=text("0"), nullable=False, default=False
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

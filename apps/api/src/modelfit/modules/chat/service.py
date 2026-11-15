@@ -128,16 +128,15 @@ class ChatService:
                     break
 
                 # Record model's function call intent in contents
-                f_calls = [
-                    {"name": fc.name, "args": fc.args}
-                    for fc in function_calls_in_turn
-                ]
-                contents.append({
-                    "role": "model",
-                    "content": full_text,
-                    "function_calls": f_calls,
-                    "raw_parts": turn_raw_parts if turn_raw_parts else None,
-                })
+                f_calls = [{"name": fc.name, "args": fc.args} for fc in function_calls_in_turn]
+                contents.append(
+                    {
+                        "role": "model",
+                        "content": full_text,
+                        "function_calls": f_calls,
+                        "raw_parts": turn_raw_parts if turn_raw_parts else None,
+                    }
+                )
 
                 # Execute each tool call
                 function_responses = []
@@ -199,16 +198,20 @@ class ChatService:
                         data={"name": fc.name, "status": "completed"},
                     )
 
-                    function_responses.append({
-                        "name": fc.name,
-                        "response": tool_result,
-                    })
+                    function_responses.append(
+                        {
+                            "name": fc.name,
+                            "response": tool_result,
+                        }
+                    )
 
                 # Append tool results to multi-turn contents for the next round
-                contents.append({
-                    "role": "user",
-                    "function_responses": function_responses,
-                })
+                contents.append(
+                    {
+                        "role": "user",
+                        "function_responses": function_responses,
+                    }
+                )
                 dt_round_ms = (time.perf_counter() - t_round_0) * 1000
                 logger.debug("chat_round_timing", round=rounds, duration_ms=round(dt_round_ms, 1))
 
@@ -216,16 +219,19 @@ class ChatService:
             if rounds >= MAX_TOOL_ROUNDS:
                 logger.warning("chat_tool_round_cap_reached", rounds=rounds)
                 synth_contents = list(contents)
-                synth_contents.append({
-                    "role": "user",
-                    "content": (
-                        "Maximum tool iteration limit reached. Please synthesize a final, clear "
-                        "answer for the user based on the tool results gathered so far. "
-                        "Do not attempt to call any more tools. If a tool reported an error, "
-                        "gated status, or missing information, explain it directly to the user "
-                        "without inventing any numbers."
-                    ),
-                })
+                synth_contents.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Maximum tool iteration limit reached. "
+                            "Please synthesize a final, clear "
+                            "answer for the user based on the tool results gathered so far. "
+                            "Do not attempt to call any more tools. If a tool reported an error, "
+                            "gated status, or missing information, explain it directly to the user "
+                            "without inventing any numbers."
+                        ),
+                    }
+                )
                 try:
                     synth_stream = self.llm_client.generate_stream(
                         contents=synth_contents,

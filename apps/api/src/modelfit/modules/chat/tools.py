@@ -55,9 +55,7 @@ def _match_hardware_profile(
     q_lower = query.lower()
 
     # Check for Apple Silicon / Unified Memory
-    is_apple_unified = bool(
-        re.search(r"\b(apple|mac|macbook|m1|m2|m3|m4|unified)\b", q_lower)
-    )
+    is_apple_unified = bool(re.search(r"\b(apple|mac|macbook|m1|m2|m3|m4|unified)\b", q_lower))
     if is_apple_unified:
         gb = _extract_gb(query)
         if not gb or gb <= 0:
@@ -291,11 +289,7 @@ async def execute_tool(
         elif name == "get_model_details":
             validated_detail = GetModelDetailsArgs.model_validate(args)
             detail = await catalog_service.get_model_detail(session, validated_detail.repo_id)
-            total_p = (
-                detail.normalized_model.total_params
-                if detail.normalized_model
-                else None
-            )
+            total_p = detail.normalized_model.total_params if detail.normalized_model else None
             return {
                 "id": detail.id,
                 "model_name": detail.model_name,
@@ -373,8 +367,7 @@ async def execute_tool(
             if validated_rec.memory_budget_gb and validated_rec.memory_budget_gb > 0:
                 budget = int(validated_rec.memory_budget_gb * (1024**3))
                 hw_name = (
-                    validated_rec.hardware_name
-                    or f"Custom {validated_rec.memory_budget_gb}GB VRAM"
+                    validated_rec.hardware_name or f"Custom {validated_rec.memory_budget_gb}GB VRAM"
                 )
                 hw_input = HardwareProfileInput(
                     name=hw_name,
@@ -416,8 +409,7 @@ async def execute_tool(
                     "action_required": "ask_user_clarification",
                     "missing_fields": ["hardware"],
                     "message": (
-                        "Please specify your GPU hardware profile "
-                        "or an explicit VRAM budget in GB."
+                        "Please specify your GPU hardware profile or an explicit VRAM budget in GB."
                     ),
                 }
 
@@ -467,8 +459,7 @@ async def execute_tool(
             "code": exc.code,
             "error": exc.message,
             "message": (
-                f"Tool execution stopped ({exc.code}): {exc.message}. "
-                "Do not retry this tool call."
+                f"Tool execution stopped ({exc.code}): {exc.message}. Do not retry this tool call."
             ),
         }
     except Exception as exc:

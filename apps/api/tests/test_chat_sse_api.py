@@ -30,6 +30,7 @@ async def test_chat_sse_stream_success() -> None:
 async def test_chat_rate_limiting_exceeded() -> None:
     """Verifies that exceeding the 4 req/min limit yields a RATE_LIMITED error event."""
     from modelfit.modules.chat.service import chat_rate_limiter
+
     # Clear limiter for clean test run
     chat_rate_limiter.reset()
 

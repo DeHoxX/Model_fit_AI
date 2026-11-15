@@ -11,13 +11,13 @@ The repository includes a PowerShell runner script at [`scripts/dev.ps1`](file:/
 You can run commands from the project root using PowerShell:
 
 ```powershell
-# Start local containers
-.\scripts\dev.ps1 up
+# Start both FastAPI backend and Next.js frontend concurrently
+.\scripts\dev.ps1
 
-# Start FastAPI backend server
+# Start FastAPI backend server only (uses API_PORT, default 8000)
 .\scripts\dev.ps1 dev-api
 
-# Start Next.js frontend dev server
+# Start Next.js frontend dev server only
 .\scripts\dev.ps1 dev-web
 
 # Run all linters (ruff for Python, eslint for Next.js)
@@ -41,7 +41,7 @@ You can run commands from the project root using PowerShell:
 # Generate TypeScript API client from FastAPI OpenAPI schema
 .\scripts\dev.ps1 gen-apiclient
 
-# Run the full validation gate (lint + typecheck + test)
+# Run the full validation gate via scripts/check.ps1
 .\scripts\dev.ps1 check
 ```
 
@@ -53,9 +53,7 @@ If you prefer executing commands directly without the helper script:
 
 | Action | PowerShell Command |
 |---|---|
-| **Start Containers** | `docker compose up -d` |
-| **Stop Containers** | `docker compose down` |
-| **View Logs** | `docker compose logs -f` |
+| **Run Full Check** | `.\scripts\check.ps1` |
 | **Run Backend API** | `cd apps/api; uv run uvicorn modelfit.main:app --reload --port 8000` |
 | **Run Frontend Web** | `cd apps/web; npm run dev` |
 | **Alembic Migrate** | `cd apps/api; uv run alembic upgrade head` |

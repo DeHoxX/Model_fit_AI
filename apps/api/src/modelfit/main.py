@@ -40,15 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Validate LLM credentials at startup in development and production
     if settings.APP_ENV != "test":
-        if not settings.LLM_API_KEY:
-            raise RuntimeError(
-                "LLM_API_KEY environment variable is required in development and production modes."
-            )
-        if not settings.LLM_MODEL:
-            raise RuntimeError(
-                "LLM_MODEL environment variable must be explicitly configured "
-                "(e.g. export LLM_MODEL=<model-name>)."
-            )
+        settings.validate_llm_credentials()
 
     # Seed default hardware presets idempotently if table is empty
     from modelfit.db.session import get_session_maker

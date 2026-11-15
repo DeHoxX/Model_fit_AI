@@ -21,8 +21,7 @@ class CatalogRepository:
     async def get_by_repo_ids(
         self, session: AsyncSession, repo_ids: list[str]
     ) -> dict[str, ModelCache]:
-        """Finds cached models by HF repository IDs, returning a dict mapping repo_id to ModelCache.
-        """
+        """Finds cached models by HF repo IDs, returning a dict of repo_id to ModelCache."""
         if not repo_ids:
             return {}
         stmt = select(ModelCache).where(ModelCache.hf_model_id.in_(repo_ids))

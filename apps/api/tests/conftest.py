@@ -10,9 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # Set test environment
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["LLM_API_KEY"] = "test-key"
+os.environ["LLM_MODEL"] = "test-model"
 
 from modelfit.db.base import Base
-from modelfit.db.session import get_db
+from modelfit.db.session import get_db, setup_sqlite_pragmas
 from modelfit.main import create_app
 from modelfit.modules.catalog.models import ModelCache  # noqa: F401
 from modelfit.modules.hardware.models import HardwareProfile  # noqa: F401
@@ -21,6 +23,7 @@ test_engine = create_async_engine(
     "sqlite+aiosqlite:///:memory:",
     connect_args={"check_same_thread": False},
 )
+setup_sqlite_pragmas(test_engine)
 TestSessionLocal = async_sessionmaker(
     bind=test_engine,
     class_=AsyncSession,
@@ -29,8 +32,9 @@ TestSessionLocal = async_sessionmaker(
 )
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 async def prepare_database() -> AsyncGenerator[None, None]:
+    """Prepares pristine in-memory tables for tests that use the database."""
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -39,7 +43,8 @@ async def prepare_database() -> AsyncGenerator[None, None]:
 
 
 @pytest.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(prepare_database: None) -> AsyncGenerator[AsyncSession, None]:
+    """Provides an isolated async session for database tests."""
     async with TestSessionLocal() as session:
         yield session
 

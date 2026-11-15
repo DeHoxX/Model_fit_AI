@@ -45,9 +45,17 @@ pnpm-debug.log*
 *.pem
 *.key
 
+# Local SQLite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/*.db
+
 # Scratch & temporary inspection files
 scratch/
 scratch*/
+scripts/.check-logs/
 
 # IDE
 .idea/

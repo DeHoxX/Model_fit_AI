@@ -24,8 +24,7 @@ def upgrade() -> None:
         "model_cache",
         sa.Column(
             "id",
-            sa.UUID(),
-            server_default=sa.text("gen_random_uuid()"),
+            sa.Uuid(),
             nullable=False,
         ),
         sa.Column("hf_model_id", sa.String(length=255), nullable=False),
@@ -39,28 +38,25 @@ def upgrade() -> None:
         sa.Column(
             "fetched_at",
             sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("raw_config", sa.JSON(), nullable=False),
         sa.Column("normalized_payload", sa.JSON(), nullable=False),
         sa.Column("architecture_name", sa.String(length=100), nullable=True),
-        sa.Column("is_supported", sa.Boolean(), server_default=sa.text("true"), nullable=False),
-        sa.Column("gated", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column("is_supported", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("gated", sa.Boolean(), server_default=sa.text("0"), nullable=False),
         sa.Column(
             "param_provenance", sa.String(length=50), server_default="derived", nullable=False
         ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_model_cache")),

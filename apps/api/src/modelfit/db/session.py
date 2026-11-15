@@ -1,7 +1,9 @@
 """Async database engine and session management."""
 
 from collections.abc import AsyncGenerator
+from typing import Any
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -13,6 +15,18 @@ from modelfit.core.config import settings
 
 engine: AsyncEngine | None = None
 async_session_maker: async_sessionmaker[AsyncSession] | None = None
+
+
+def setup_sqlite_pragmas(async_engine: AsyncEngine) -> None:
+    """Configures SQLite PRAGMAs (WAL, foreign keys, busy timeout) on every connection."""
+
+    @event.listens_for(async_engine.sync_engine, "connect")
+    def set_sqlite_pragmas(dbapi_connection: Any, connection_record: Any) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
 
 
 def get_engine() -> AsyncEngine:
@@ -30,6 +44,8 @@ def get_engine() -> AsyncEngine:
             future=True,
             connect_args=connect_args,
         )
+        if "sqlite" in db_url:
+            setup_sqlite_pragmas(engine)
         async_session_maker = async_sessionmaker(
             bind=engine,
             class_=AsyncSession,
