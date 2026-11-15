@@ -27,10 +27,10 @@ class FakeScriptedLLMClient:
         self,
         contents: list[dict[str, Any]],
         system_prompt: str,
-        tools: list[Any],
+        tools: list[Any] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         self.call_history.append({
-            "contents": contents,
+            "contents": [dict(c) for c in contents],
             "system_prompt": system_prompt,
             "tools": tools,
         })

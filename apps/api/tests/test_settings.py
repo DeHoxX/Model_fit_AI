@@ -44,3 +44,55 @@ def test_settings_loads_root_env_from_apps_api_cwd(monkeypatch: pytest.MonkeyPat
         monkeypatch.delenv("APP_ENV", raising=False)
         settings = Settings()
         assert "modelfit_dev_password" in settings.DATABASE_URL
+
+
+def test_llm_api_keys_trim_dedup_and_fallback() -> None:
+    """Verifies that LLM_API_KEYS trims spaces, drops empty tokens, and deduplicates."""
+    s = Settings(
+        APP_ENV="test",
+        LLM_API_KEYS=" key_1 , key_2, , key_1 , key_3  ",
+    )
+    raw_keys = [k.get_secret_value() for k in s.llm_api_key_list]
+    assert raw_keys == ["key_1", "key_2", "key_3"]
+
+    # Fallback to single LLM_API_KEY
+    s_single = Settings(
+        APP_ENV="test",
+        LLM_API_KEY="  single_key  ",
+        LLM_API_KEYS=None,
+    )
+    assert [k.get_secret_value() for k in s_single.llm_api_key_list] == ["single_key"]
+
+
+def test_llm_settings_fail_fast_validation() -> None:
+    """In development/production mode, missing model or keys must fail fast at startup."""
+    # Missing model
+    with pytest.raises(ValidationError) as exc:
+        Settings(
+            APP_ENV="development",
+            LLM_PROVIDER="groq",
+            LLM_API_KEYS="key_1",
+            LLM_MODEL=None,
+        )
+    assert "LLM_MODEL is required" in str(exc.value)
+
+    # Groq with no keys
+    with pytest.raises(ValidationError) as exc:
+        Settings(
+            APP_ENV="development",
+            LLM_PROVIDER="groq",
+            LLM_API_KEYS="  ,  ",
+            LLM_API_KEY=None,
+            LLM_MODEL="llama-3.3-70b-versatile",
+        )
+    assert "At least one Groq API key is required" in str(exc.value)
+
+    # Gemini with no key
+    with pytest.raises(ValidationError) as exc:
+        Settings(
+            APP_ENV="development",
+            LLM_PROVIDER="gemini",
+            LLM_API_KEY=None,
+            LLM_MODEL="gemini-2.5-flash",
+        )
+    assert "LLM_API_KEY is required" in str(exc.value)

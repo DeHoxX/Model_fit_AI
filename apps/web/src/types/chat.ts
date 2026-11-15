@@ -23,6 +23,7 @@ export interface ChatMessage {
   recommendations?: RecommendationCandidate[];
   isStreaming?: boolean;
   error?: string;
+  errorCode?: string;
   quickReplies?: QuickReplyOption[];
 }
 

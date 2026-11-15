@@ -14,6 +14,7 @@ import {
   Compass,
   AlertCircle,
   FileCheck2,
+  MessageSquare,
 } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { paths } from '@/api/schema';
@@ -22,6 +23,20 @@ type ModelSummary =
   paths['/api/v1/models']['get']['responses']['200']['content']['application/json']['items'][number];
 
 type SortOption = 'downloads' | 'likes' | 'recent';
+
+const MODEL_TYPES = [
+  { label: 'All Categories', value: '' },
+  { label: 'Text generation', value: 'text-generation' },
+  { label: 'Text to speech', value: 'text-to-speech' },
+  { label: 'Speech recognition', value: 'automatic-speech-recognition' },
+  { label: 'Text to image', value: 'text-to-image' },
+  { label: 'Image to text', value: 'image-to-text' },
+  { label: 'Embeddings', value: 'feature-extraction' },
+  { label: 'Sentence similarity', value: 'sentence-similarity' },
+  { label: 'Translation', value: 'translation' },
+  { label: 'Summarization', value: 'summarization' },
+  { label: 'Question answering', value: 'question-answering' },
+] as const;
 
 function formatNumber(num: number): string {
   if (num >= 1_000_000) {
@@ -47,6 +62,7 @@ function formatParams(num?: number | null): string | null {
 export default function ModelCatalogPage() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('downloads');
+  const [pipelineTag, setPipelineTag] = useState('');
   const [models, setModels] = useState<ModelSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -66,6 +82,7 @@ export default function ModelCatalogPage() {
       try {
         const queryParams = new URLSearchParams();
         if (search.trim()) queryParams.set('search', search.trim());
+        if (pipelineTag) queryParams.set('pipeline_tag', pipelineTag);
         queryParams.set('sort', sort);
         queryParams.set('limit', '24');
         if (cursor) queryParams.set('cursor', cursor);
@@ -75,7 +92,11 @@ export default function ModelCatalogPage() {
         >(`/api/v1/models?${queryParams.toString()}`);
 
         if (append) {
-          setModels(prev => [...prev, ...data.items]);
+          setModels(prev => {
+            const seen = new Set(prev.map(m => m.id));
+            const fresh = data.items.filter(item => !seen.has(item.id));
+            return [...prev, ...fresh];
+          });
         } else {
           setModels(data.items);
         }
@@ -90,7 +111,7 @@ export default function ModelCatalogPage() {
         setIsLoadingMore(false);
       }
     },
-    [search, sort]
+    [search, sort, pipelineTag]
   );
 
   useEffect(() => {
@@ -143,9 +164,9 @@ export default function ModelCatalogPage() {
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Search & Filter Toolbar */}
-        <div className="bg-[#131b17] border border-[#202c26] rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+        <div className="bg-[#131b17] border border-[#202c26] rounded-xl p-3.5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-sm">
           {/* Search Box */}
-          <div className="relative w-full sm:w-96 flex items-center">
+          <div className="relative flex-1 max-w-md flex items-center">
             <Search size={15} className="absolute left-3 text-[#52635a]" />
             <input
               type="text"
@@ -157,47 +178,69 @@ export default function ModelCatalogPage() {
             />
           </div>
 
-          {/* Sort Selector */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <Filter size={14} className="text-[#617369]" />
-            <span className="text-xs text-[#708479] font-medium">Sort by:</span>
-            <div className="flex items-center bg-[#0d1210] border border-[#24332c] rounded-lg p-0.5 text-xs">
-              <button
-                type="button"
-                id="sort-downloads"
-                onClick={() => setSort('downloads')}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  sort === 'downloads'
-                    ? 'bg-[#22332a] text-[#a0c5b3] border border-[#3b5246]'
-                    : 'text-[#708479] hover:text-[#e4ece7]'
-                }`}
+          <div className="flex flex-wrap items-center gap-3 justify-end">
+            {/* Model-Type Filter Dropdown */}
+            <div className="flex items-center gap-2">
+              <Layers size={14} className="text-[#617369]" />
+              <label htmlFor="model-type-select" className="text-xs text-[#708479] font-medium hidden sm:inline">
+                Task:
+              </label>
+              <select
+                id="model-type-select"
+                value={pipelineTag}
+                onChange={e => setPipelineTag(e.target.value)}
+                className="bg-[#0d1210] border border-[#24332c] rounded-lg px-2.5 py-1.5 text-xs text-[#e4ece7] focus:outline-none focus:border-[#405c4d] transition-colors cursor-pointer"
               >
-                Downloads
-              </button>
-              <button
-                type="button"
-                id="sort-likes"
-                onClick={() => setSort('likes')}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  sort === 'likes'
-                    ? 'bg-[#22332a] text-[#a0c5b3] border border-[#3b5246]'
-                    : 'text-[#708479] hover:text-[#e4ece7]'
-                }`}
-              >
-                Likes
-              </button>
-              <button
-                type="button"
-                id="sort-recent"
-                onClick={() => setSort('recent')}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  sort === 'recent'
-                    ? 'bg-[#22332a] text-[#a0c5b3] border border-[#3b5246]'
-                    : 'text-[#708479] hover:text-[#e4ece7]'
-                }`}
-              >
-                Recent
-              </button>
+                {MODEL_TYPES.map(t => (
+                  <option key={t.value} value={t.value} className="bg-[#111714] text-[#e4ece7]">
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sort Selector */}
+            <div className="flex items-center gap-2">
+              <Filter size={14} className="text-[#617369]" />
+              <span className="text-xs text-[#708479] font-medium hidden sm:inline">Sort:</span>
+              <div className="flex items-center bg-[#0d1210] border border-[#24332c] rounded-lg p-0.5 text-xs">
+                <button
+                  type="button"
+                  id="sort-downloads"
+                  onClick={() => setSort('downloads')}
+                  className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
+                    sort === 'downloads'
+                      ? 'bg-[#22332a] text-[#a0c5b3] border border-[#3b5246]'
+                      : 'text-[#708479] hover:text-[#e4ece7]'
+                  }`}
+                >
+                  Downloads
+                </button>
+                <button
+                  type="button"
+                  id="sort-likes"
+                  onClick={() => setSort('likes')}
+                  className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
+                    sort === 'likes'
+                      ? 'bg-[#22332a] text-[#a0c5b3] border border-[#3b5246]'
+                      : 'text-[#708479] hover:text-[#e4ece7]'
+                  }`}
+                >
+                  Likes
+                </button>
+                <button
+                  type="button"
+                  id="sort-recent"
+                  onClick={() => setSort('recent')}
+                  className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
+                    sort === 'recent'
+                      ? 'bg-[#22332a] text-[#a0c5b3] border border-[#3b5246]'
+                      : 'text-[#708479] hover:text-[#e4ece7]'
+                  }`}
+                >
+                  Recent
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -246,9 +289,8 @@ export default function ModelCatalogPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="models-grid">
             {models.map(m => (
-              <Link
+              <div
                 key={m.id}
-                href={`/models/${m.id}`}
                 className="group relative bg-[#121915] hover:bg-[#15201b] border border-[#202c26] hover:border-[#35493e] rounded-xl p-4 transition-all duration-200 flex flex-col justify-between shadow-sm hover:shadow-md"
               >
                 <div>
@@ -286,9 +328,12 @@ export default function ModelCatalogPage() {
                     </div>
                   </div>
 
-                  <h3 className="text-sm font-semibold text-[#e4ece7] group-hover:text-[#a0c5b3] transition-colors truncate mb-1">
+                  <Link
+                    href={`/models/${m.id}`}
+                    className="text-sm font-semibold text-[#e4ece7] group-hover:text-[#a0c5b3] transition-colors truncate block mb-1"
+                  >
                     {m.model_name}
-                  </h3>
+                  </Link>
 
                   <p className="text-[11px] text-[#61756a] font-mono truncate mb-3">
                     {m.id}
@@ -307,17 +352,29 @@ export default function ModelCatalogPage() {
                     </span>
                   </div>
 
-                  {m.total_params ? (
-                    <span className="font-mono text-[#9bb7a8] text-[10px]">
-                      {formatParams(m.total_params)}
-                    </span>
-                  ) : m.pipeline_tag ? (
-                    <span className="font-mono text-[10px] text-[#55695e]">
-                      {m.pipeline_tag}
-                    </span>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {m.total_params ? (
+                      <span className="font-mono text-[#9bb7a8] text-[10px]">
+                        {formatParams(m.total_params)}
+                      </span>
+                    ) : m.pipeline_tag ? (
+                      <span className="font-mono text-[10px] text-[#55695e]">
+                        {m.pipeline_tag}
+                      </span>
+                    ) : null}
+
+                    <Link
+                      href={`/chat?repo_id=${encodeURIComponent(m.id)}`}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#16231d] hover:bg-[#1d2f26] text-[#75a691] hover:text-[#a0c5b3] border border-[#26382f] transition-colors"
+                      title="Ask about this model in chat"
+                      id={`ask-in-chat-${m.id.replace('/', '-')}`}
+                    >
+                      <MessageSquare size={11} />
+                      <span>Ask in chat</span>
+                    </Link>
+                  </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

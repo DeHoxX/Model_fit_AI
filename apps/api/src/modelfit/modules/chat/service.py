@@ -1,5 +1,8 @@
 """ChatService: Multi-turn tool execution loop, rate limiting, and post-check validation."""
 
+import json
+import time
+import traceback
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,6 +11,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from modelfit.core.config import settings
 from modelfit.core.errors import AppError
 from modelfit.modules.catalog.rate_limiter import SlidingWindowRateLimiter
 from modelfit.modules.chat.llm_client import LLMClient, get_llm_client
@@ -83,10 +87,12 @@ class ChatService:
         ]
 
         verified_model_ids: set[str] = set()
+        executed_calls: dict[str, Any] = {}
         rounds = 0
 
         try:
             while rounds < MAX_TOOL_ROUNDS:
+                t_round_0 = time.perf_counter()
                 rounds += 1
                 stream = self.llm_client.generate_stream(
                     contents=contents,
@@ -96,6 +102,7 @@ class ChatService:
 
                 function_calls_in_turn = []
                 turn_text_parts = []
+                turn_raw_parts: list[Any] = []
 
                 async for chunk in stream:
                     if chunk.text:
@@ -104,12 +111,20 @@ class ChatService:
                     if chunk.function_calls:
                         for fc in chunk.function_calls:
                             function_calls_in_turn.append(fc)
+                    if chunk.raw_parts:
+                        turn_raw_parts.extend(chunk.raw_parts)
 
                 full_text = "".join(turn_text_parts)
 
                 # If no tools called, conversation turn completed normally
                 if not function_calls_in_turn:
                     contents.append({"role": "model", "content": full_text})
+                    dt_round_ms = (time.perf_counter() - t_round_0) * 1000
+                    logger.debug(
+                        "chat_round_timing",
+                        round=rounds,
+                        duration_ms=round(dt_round_ms, 1),
+                    )
                     break
 
                 # Record model's function call intent in contents
@@ -121,6 +136,7 @@ class ChatService:
                     "role": "model",
                     "content": full_text,
                     "function_calls": f_calls,
+                    "raw_parts": turn_raw_parts if turn_raw_parts else None,
                 })
 
                 # Execute each tool call
@@ -132,7 +148,27 @@ class ChatService:
                         data={"name": fc.name, "status": "running"},
                     )
 
-                    tool_result = await execute_tool(fc.name, fc.args, session)
+                    t_tool_0 = time.perf_counter()
+                    call_sig = f"{fc.name}:{json.dumps(fc.args, sort_keys=True)}"
+                    if call_sig in executed_calls:
+                        prev_result = executed_calls[call_sig]
+                        tool_result = (
+                            dict(prev_result)
+                            if isinstance(prev_result, dict)
+                            else {"result": prev_result}
+                        )
+                        tool_result["duplicate_call"] = True
+                        tool_result["note"] = (
+                            f"Call '{fc.name}' with identical arguments was already executed. "
+                            "Skipping re-execution."
+                        )
+                        tool_result["retryable"] = False
+                    else:
+                        tool_result = await execute_tool(fc.name, fc.args, session)
+                        executed_calls[call_sig] = tool_result
+
+                    dt_tool_ms = (time.perf_counter() - t_tool_0) * 1000
+                    logger.debug("chat_tool_timing", tool=fc.name, duration_ms=round(dt_tool_ms, 1))
 
                     # Extract verified model IDs from tool results
                     self._harvest_verified_models(fc.name, tool_result, verified_model_ids)
@@ -173,10 +209,45 @@ class ChatService:
                     "role": "user",
                     "function_responses": function_responses,
                 })
+                dt_round_ms = (time.perf_counter() - t_round_0) * 1000
+                logger.debug("chat_round_timing", round=rounds, duration_ms=round(dt_round_ms, 1))
 
             # Check if round cap was reached
             if rounds >= MAX_TOOL_ROUNDS:
                 logger.warning("chat_tool_round_cap_reached", rounds=rounds)
+                synth_contents = list(contents)
+                synth_contents.append({
+                    "role": "user",
+                    "content": (
+                        "Maximum tool iteration limit reached. Please synthesize a final, clear "
+                        "answer for the user based on the tool results gathered so far. "
+                        "Do not attempt to call any more tools. If a tool reported an error, "
+                        "gated status, or missing information, explain it directly to the user "
+                        "without inventing any numbers."
+                    ),
+                })
+                try:
+                    synth_stream = self.llm_client.generate_stream(
+                        contents=synth_contents,
+                        system_prompt=self._system_prompt,
+                        tools=None,
+                    )
+                    async for chunk in synth_stream:
+                        if chunk.text:
+                            yield ChatSSEEvent(event="token", data={"text": chunk.text})
+                except Exception as synth_exc:
+                    logger.warning("synthesis_stream_failed", error=str(synth_exc))
+                    yield ChatSSEEvent(
+                        event="token",
+                        data={
+                            "text": (
+                                "I reached the maximum iteration limit while analyzing this "
+                                "request. Please review the tool outputs above or provide "
+                                "specific model/hardware details."
+                            )
+                        },
+                    )
+
                 notice = (
                     "\n\n*(Note: Maximum tool iteration limit reached. "
                     "I have finalized the response based on the completed calculations.)*"
@@ -184,19 +255,75 @@ class ChatService:
                 yield ChatSSEEvent(event="token", data={"text": notice})
 
         except Exception as exc:
-            err_str = str(exc)
-            logger.error("chat_service_error", error=err_str)
-            is_rate = (
-                "429" in err_str
-                or "quota" in err_str.lower()
-                or "resourceexhausted" in err_str.lower()
+            exc_type = type(exc).__name__
+            raw_err_str = str(exc)
+            # Redact any accidental secret leakage across all configured keys
+            safe_err = raw_err_str
+            tb_str = traceback.format_exc()
+            for key_obj in settings.llm_api_key_list:
+                k_val = key_obj.get_secret_value()
+                if k_val:
+                    safe_err = safe_err.replace(k_val, "[REDACTED]")
+                    tb_str = tb_str.replace(k_val, "[REDACTED]")
+
+            logger.error(
+                "chat_service_error",
+                exception_type=exc_type,
+                error=safe_err,
+                traceback=tb_str,
             )
-            if is_rate:
+
+            is_busy = (
+                "503" in raw_err_str
+                or "unavailable" in raw_err_str.lower()
+                or "high demand" in raw_err_str.lower()
+            )
+            is_network = (
+                "connecttimeout" in raw_err_str.lower()
+                or "connecterror" in raw_err_str.lower()
+                or "readtimeout" in raw_err_str.lower()
+                or "networkerror" in raw_err_str.lower()
+                or "timeout" in exc_type.lower()
+                or "connect" in exc_type.lower()
+            )
+            is_rate = (
+                "429" in raw_err_str
+                or "quota" in raw_err_str.lower()
+                or "resourceexhausted" in raw_err_str.lower()
+            )
+            is_auth = (
+                "401" in raw_err_str
+                or "403" in raw_err_str
+                or "unauthenticated" in raw_err_str.lower()
+                or "permissiondenied" in raw_err_str.lower()
+                or "api_key" in raw_err_str.lower()
+            )
+
+            if isinstance(exc, AppError):
+                code = exc.code
+                msg = exc.message
+            elif is_busy:
+                code = "LLM_MODEL_BUSY"
+                msg = (
+                    "The AI model is currently busy with high demand. "
+                    "Please retry your request in a moment."
+                )
+            elif is_network:
+                code = "LLM_NETWORK_ERROR"
+                msg = "Could not reach the AI service. Please retry."
+            elif is_rate:
                 code = "LLM_RATE_LIMITED"
                 msg = "The upstream AI service is temporarily rate limited. Please wait a moment."
+            elif is_auth:
+                code = "LLM_AUTH_ERROR"
+                msg = "AI service authentication error. Check LLM_API_KEY configuration."
             else:
-                code = "LLM_ERROR"
-                msg = "An error occurred while generating a response. Please try again."
+                code = f"ERROR_{exc_type.upper()}"
+                # Keep client-facing message safe and concise (first 100 characters max)
+                if safe_err:
+                    msg = f"Inference error ({exc_type}): {safe_err[:100]}"
+                else:
+                    msg = f"An error occurred ({exc_type})."
 
             yield ChatSSEEvent(
                 event="error",
@@ -207,8 +334,8 @@ class ChatService:
                     }
                 },
             )
-
-        yield ChatSSEEvent(event="done", data={})
+        finally:
+            yield ChatSSEEvent(event="done", data={})
 
     def _harvest_verified_models(
         self,

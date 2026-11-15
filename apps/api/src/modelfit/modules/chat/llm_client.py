@@ -15,12 +15,14 @@ logger = structlog.get_logger(__name__)
 class FunctionCallInfo:
     name: str
     args: dict[str, Any]
+    call_id: str | None = None
 
 
 @dataclass
 class StreamChunk:
     text: str | None = None
     function_calls: list[FunctionCallInfo] | None = None
+    raw_parts: list[Any] | None = None
 
 
 class LLMClient(Protocol):
@@ -30,8 +32,13 @@ class LLMClient(Protocol):
         self,
         contents: list[dict[str, Any]],
         system_prompt: str,
-        tools: list[Any],
+        tools: list[Any] | None = None,
     ) -> AsyncIterator[StreamChunk]: ...
+
+
+LLM_TIMEOUT_MS: int = 15000  # milliseconds, per-attempt
+LLM_RETRY_ATTEMPTS: int = 2
+LLM_RETRY_MAX_DELAY: float = 2.0
 
 
 class GeminiLLMClient:
@@ -51,14 +58,25 @@ class GeminiLLMClient:
             )
 
         from google import genai
-        self.client = genai.Client(api_key=settings.LLM_API_KEY)
+        from google.genai import types
+
+        # Cap per-attempt timeout and retries (design choice, unmeasured)
+        # Note: google-genai HttpOptions.timeout is in milliseconds
+        self.http_options = types.HttpOptions(
+            timeout=LLM_TIMEOUT_MS,  # milliseconds, per-attempt
+            retry_options=types.HttpRetryOptions(
+                attempts=LLM_RETRY_ATTEMPTS,  # Max 2 attempts instead of unbounded delays
+                max_delay=LLM_RETRY_MAX_DELAY,
+            ),
+        )
+        self.client = genai.Client(api_key=settings.LLM_API_KEY, http_options=self.http_options)
         self.model = settings.LLM_MODEL
 
     async def generate_stream(
         self,
         contents: list[dict[str, Any]],
         system_prompt: str,
-        tools: list[Any],
+        tools: list[Any] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Streams responses with automatic function calling disabled."""
         from google.genai import types
@@ -91,6 +109,12 @@ class GeminiLLMClient:
         gemini_contents: list[types.Content] = []
         for c in contents:
             role = "user" if c.get("role") == "user" else "model"
+            # If original model raw parts (containing thought_signature) are present,
+            # pass them back untouched so thinking models do not reject tool turns
+            if role == "model" and c.get("raw_parts"):
+                gemini_contents.append(types.Content(role="model", parts=list(c["raw_parts"])))
+                continue
+
             parts: list[types.Part] = []
             if "content" in c and c["content"]:
                 parts.append(types.Part.from_text(text=c["content"]))
@@ -129,9 +153,21 @@ class GeminiLLMClient:
                     )
                     for fc in chunk.function_calls
                 ]
+
+            raw_parts = None
+            if (
+                chunk.candidates
+                and chunk.candidates[0].content
+                and chunk.candidates[0].content.parts
+            ):
+                raw_parts = list(chunk.candidates[0].content.parts)
+            elif getattr(chunk, "parts", None) and chunk.parts is not None:
+                raw_parts = list(chunk.parts)
+
             yield StreamChunk(
                 text=chunk.text if chunk.text else None,
                 function_calls=fcalls,
+                raw_parts=raw_parts,
             )
 
 
@@ -139,9 +175,13 @@ def get_llm_client() -> LLMClient:
     """Factory creating LLM client.
 
     In APP_ENV=test, returns FakeScriptedLLMClient for hermetic testing.
-    In development and production, strictly instantiates GeminiLLMClient.
+    In development and production, instantiates GroqLLMClient or GeminiLLMClient
+    depending on LLM_PROVIDER setting.
     """
     if settings.APP_ENV == "test":
         from tests.fakes.fake_llm_client import FakeScriptedLLMClient
         return FakeScriptedLLMClient()
+    if settings.LLM_PROVIDER == "groq":
+        from modelfit.modules.chat.groq_client import GroqLLMClient
+        return GroqLLMClient()
     return GeminiLLMClient()

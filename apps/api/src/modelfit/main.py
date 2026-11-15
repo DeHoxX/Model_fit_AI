@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
+import structlog
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +30,8 @@ from modelfit.modules.hardware.router import router as hardware_router
 from modelfit.modules.health.router import router as health_router
 from modelfit.modules.recommend.router import router as recommend_router
 
+logger = structlog.get_logger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -46,6 +49,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "LLM_MODEL environment variable must be explicitly configured "
                 "(e.g. export LLM_MODEL=<model-name>)."
             )
+
+    # Seed default hardware presets idempotently if table is empty
+    from modelfit.db.session import get_session_maker
+    from modelfit.modules.hardware.service import HardwareService
+
+    sm = get_session_maker()
+    async with sm() as session:
+        hw_service = HardwareService()
+        seeded_count = await hw_service.seed_default_presets(session)
+        logger.info("hardware_presets_seeded", count=seeded_count)
 
     yield
     await close_db()

@@ -96,9 +96,12 @@ class CatalogRepository:
         sort: str = "downloads",
         limit: int = 50,
         offset: int = 0,
+        pipeline_tag: str | None = None,
     ) -> list[ModelCache]:
         """Lists cached models with optional filtering and sorting."""
         stmt = select(ModelCache)
+        if pipeline_tag:
+            stmt = stmt.where(ModelCache.pipeline_tag == pipeline_tag)
         if search:
             pattern = f"%{search.lower()}%"
             stmt = stmt.where(

@@ -44,6 +44,7 @@ class CatalogService:
         sort: str = "downloads",
         limit: int = 20,
         cursor: str | None = None,
+        pipeline_tag: str | None = None,
     ) -> ModelListResponse:
         """Lists models from Hugging Face Hub, falling back to local cache if Hub is unreachable."""
         limit = min(max(1, limit), 50)
@@ -53,6 +54,7 @@ class CatalogService:
                 sort=sort,
                 limit=limit,
                 cursor=cursor,
+                pipeline_tag=pipeline_tag,
             )
 
             # Query cache for any known support statuses
@@ -138,6 +140,7 @@ class CatalogService:
                     search=search,
                     sort=sort,
                     limit=limit,
+                    pipeline_tag=pipeline_tag,
                 )
                 summaries = [
                     ModelSummary(

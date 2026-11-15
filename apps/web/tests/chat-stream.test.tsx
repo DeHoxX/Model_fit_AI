@@ -28,6 +28,42 @@ describe('Chat SSE Streaming & Card Components', () => {
     expect(buf2).toBe('');
   });
 
+  it('parses error SSE events with structured code and message', () => {
+    const rawErrorChunk =
+      'event: error\ndata: {"error": {"code": "LLM_RATE_LIMITED", "message": "The upstream AI service is temporarily rate limited."}}\n\n';
+    const { events } = parseSSEChunk(rawErrorChunk, '');
+
+    expect(events).toHaveLength(1);
+    expect(events[0].event).toBe('error');
+    const errData = events[0].data.error as { code: string; message: string };
+    expect(errData.code).toBe('LLM_RATE_LIMITED');
+    expect(errData.message).toContain('rate limited');
+  });
+
+  it('parses LLM_NETWORK_ERROR SSE events for connection timeouts', () => {
+    const rawErrorChunk =
+      'event: error\ndata: {"error": {"code": "LLM_NETWORK_ERROR", "message": "Could not reach the AI service. Please retry."}}\n\n';
+    const { events } = parseSSEChunk(rawErrorChunk, '');
+
+    expect(events).toHaveLength(1);
+    expect(events[0].event).toBe('error');
+    const errData = events[0].data.error as { code: string; message: string };
+    expect(errData.code).toBe('LLM_NETWORK_ERROR');
+    expect(errData.message).toBe('Could not reach the AI service. Please retry.');
+  });
+
+  it('parses LLM_AUTH_ERROR SSE events for authentication and permission failures', () => {
+    const rawErrorChunk =
+      'event: error\ndata: {"error": {"code": "LLM_AUTH_ERROR", "message": "AI service authentication error. Check LLM_API_KEY configuration."}}\n\n';
+    const { events } = parseSSEChunk(rawErrorChunk, '');
+
+    expect(events).toHaveLength(1);
+    expect(events[0].event).toBe('error');
+    const errData = events[0].data.error as { code: string; message: string };
+    expect(errData.code).toBe('LLM_AUTH_ERROR');
+    expect(errData.message).toContain('authentication error');
+  });
+
   it('renders RecommendationCardView with deterministic memory numbers and estimator link', () => {
     const mockCandidate: RecommendationCandidate = {
       model_id: 'Qwen/Qwen2.5-Coder-7B-Instruct',

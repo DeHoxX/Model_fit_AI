@@ -343,3 +343,30 @@ async def test_pagination_cursor_double_encoding_regression(client: httpx.AsyncC
         assert "%25" not in raw_query, f"Double encoding detected in Hub URL: {raw_query}"
         # 2. The cursor query parameter received by the Hub equals raw base64 ending in '=='
         assert page3_hub_req.url.params["cursor"] == raw_cursor_page2
+
+
+@pytest.mark.asyncio
+async def test_list_models_with_pipeline_tag(client: httpx.AsyncClient) -> None:
+    """Verifies that pipeline_tag is correctly forwarded to Hugging Face Hub."""
+    models_list = [
+        {
+            "id": "Qwen/Qwen2.5-7B-Instruct",
+            "likes": 5000,
+            "downloads": 200000,
+            "pipeline_tag": "text-generation",
+            "gated": False,
+            "private": False,
+        }
+    ]
+
+    with respx.mock(assert_all_called=True) as respx_mock:
+        route = respx_mock.get("https://huggingface.co/api/models").respond(200, json=models_list)
+        response = await client.get("/api/v1/models?pipeline_tag=text-generation")
+
+        assert response.status_code == 200
+        assert route.called
+        assert route.calls[0].request.url.params["pipeline_tag"] == "text-generation"
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["pipeline_tag"] == "text-generation"
+

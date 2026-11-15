@@ -13,6 +13,10 @@ def setup_logging(log_level: str = "INFO") -> None:
     # Standard library root logging configuration
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level)
 
+    # Silence verbose HTTP logs containing URLs and query parameters
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

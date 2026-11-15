@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,9 +21,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     HF_TOKEN: str | None = None
-    LLM_PROVIDER: Literal["gemini"] = "gemini"
+    LLM_PROVIDER: Literal["gemini", "groq"] = "gemini"
     LLM_API_KEY: str | None = None
+    LLM_API_KEYS: str | None = None
     LLM_MODEL: str | None = None
+    LLM_CONNECT_TIMEOUT_SECONDS: float = 5.0
+    LLM_READ_TIMEOUT_SECONDS: float = 15.0
     ADMIN_TOKEN: str | None = None
 
     model_config = SettingsConfigDict(
@@ -37,13 +40,49 @@ class Settings(BaseSettings):
     def validate_cors_origins(cls, v: str) -> str:
         return v.strip()
 
+    @property
+    def llm_api_key_list(self) -> list[SecretStr]:
+        """Returns parsed, stripped, non-empty, de-duplicated SecretStr list."""
+        keys: list[SecretStr] = []
+        seen: set[str] = set()
+        if self.LLM_API_KEYS:
+            for raw in self.LLM_API_KEYS.split(","):
+                k = raw.strip()
+                if k and k not in seen:
+                    seen.add(k)
+                    keys.append(SecretStr(k))
+        elif self.LLM_API_KEY:
+            k = self.LLM_API_KEY.strip()
+            if k and k not in seen:
+                seen.add(k)
+                keys.append(SecretStr(k))
+        return keys
+
     @model_validator(mode="after")
-    def validate_production_cors(self) -> "Settings":
+    def validate_settings(self) -> "Settings":
         """In production, CORS_ORIGINS must never contain a wildcard."""
         if self.APP_ENV == "production":
             origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
             if "*" in origins:
                 raise ValueError("CORS_ORIGINS must not contain wildcard '*' in production mode.")
+
+        # In dev and prod, fail fast if LLM provider has no keys or no model
+        if self.APP_ENV != "test":
+            if not self.LLM_MODEL:
+                raise ValueError(
+                    "LLM_MODEL is required in development and production modes. "
+                    "Please configure LLM_MODEL in your environment."
+                )
+            if self.LLM_PROVIDER == "groq" and len(self.llm_api_key_list) == 0:
+                raise ValueError(
+                    "At least one Groq API key is required when LLM_PROVIDER=groq. "
+                    "Please configure LLM_API_KEYS or LLM_API_KEY in your environment."
+                )
+            if self.LLM_PROVIDER == "gemini" and not self.LLM_API_KEY:
+                raise ValueError(
+                    "LLM_API_KEY is required when LLM_PROVIDER=gemini. "
+                    "Please configure LLM_API_KEY in your environment."
+                )
         return self
 
     @property

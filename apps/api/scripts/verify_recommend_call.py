@@ -8,13 +8,14 @@ os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
 import httpx
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from modelfit.db.base import Base
 from modelfit.modules.catalog.models import ModelCache  # noqa: F401
-from modelfit.modules.hardware.models import HardwareProfile  # noqa: F401
 from modelfit.modules.catalog.repository import CatalogRepository
 from modelfit.modules.catalog.service import CatalogService
 from modelfit.modules.estimator.schemas import HardwareKind, HardwareProfileInput
+from modelfit.modules.hardware.models import HardwareProfile  # noqa: F401
 from modelfit.modules.recommend.schemas import RequirementSpec
 from modelfit.modules.recommend.service import RecommendService
 

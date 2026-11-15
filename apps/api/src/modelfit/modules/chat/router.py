@@ -48,13 +48,26 @@ async def chat_completions(
 
     async def sse_generator() -> AsyncIterator[str]:
         messages_dicts = [m.model_dump() for m in req.messages]
-        async for event in service.process_chat(
-            messages=messages_dicts,
-            session=session,
-            client_ip=client_ip,
-        ):
-            data_str = json.dumps(event.data)
-            yield f"event: {event.event}\ndata: {data_str}\n\n"
+        try:
+            async for event in service.process_chat(
+                messages=messages_dicts,
+                session=session,
+                client_ip=client_ip,
+            ):
+                data_str = json.dumps(event.data)
+                yield f"event: {event.event}\ndata: {data_str}\n\n"
+        except Exception:
+            err_payload = json.dumps({
+                "error": {
+                    "code": "INTERNAL_STREAM_ERROR",
+                    "message": (
+                        "An error occurred while communicating with the AI service. "
+                        "Please retry."
+                    ),
+                }
+            })
+            yield f"event: error\ndata: {err_payload}\n\n"
+            yield "event: done\ndata: {}\n\n"
 
     return StreamingResponse(
         sse_generator(),

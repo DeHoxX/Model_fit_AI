@@ -38,6 +38,7 @@ async def list_models(
     ),
     limit: int = Query(default=20, ge=1, le=50, description="Max results per page (capped at 50)"),
     cursor: str | None = Query(default=None, description="Opaque cursor for pagination"),
+    pipeline_tag: str | None = Query(default=None, description="Hugging Face pipeline tag filter"),
     session: AsyncSession = Depends(get_db),
     service: CatalogService = Depends(get_catalog_service),
 ) -> ModelListResponse:
@@ -48,6 +49,7 @@ async def list_models(
         sort=sort,
         limit=limit,
         cursor=cursor,
+        pipeline_tag=pipeline_tag,
     )
 
 

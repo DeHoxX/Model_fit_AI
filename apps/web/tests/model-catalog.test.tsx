@@ -42,7 +42,18 @@ describe('ModelCatalogPage', () => {
       expect(screen.getByText('Meta-Llama-3-8B')).toBeDefined();
       expect(screen.getByText('meta-llama')).toBeDefined();
       expect(screen.getByText('Supported')).toBeDefined();
+      // Verify Ask in chat button
+      const askBtn = screen.getByRole('link', { name: /Ask in chat/i });
+      expect(askBtn).toBeDefined();
+      expect(askBtn.getAttribute('href')).toBe('/chat?repo_id=meta-llama%2FMeta-Llama-3-8B');
     });
+
+    // Verify model-type filter dropdown
+    const select = screen.getByLabelText(/Task/i) as HTMLSelectElement;
+    expect(select).toBeDefined();
+    expect(screen.getByRole('option', { name: 'Text generation' })).toBeDefined();
+    expect(screen.getByRole('option', { name: 'Text to speech' })).toBeDefined();
+    expect(screen.getByRole('option', { name: 'Speech recognition' })).toBeDefined();
   });
 
   it('renders empty state when no models match search', async () => {

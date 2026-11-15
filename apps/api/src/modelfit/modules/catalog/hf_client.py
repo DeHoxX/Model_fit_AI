@@ -52,6 +52,7 @@ class HubClient:
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         timeout: float = 10.0,
+        allowed_status_codes: tuple[int, ...] = (200,),
     ) -> httpx.Response:
         req_headers = self._get_headers(headers)
         try:
@@ -99,7 +100,7 @@ class HubClient:
                 message=f"Hugging Face Hub returned upstream error ({response.status_code}).",
                 status_code=502,
             )
-        elif response.status_code != 200:
+        elif response.status_code not in allowed_status_codes:
             # Handle client errors like 400 Bad Request (e.g. invalid pagination cursor)
             error_msg = f"Hugging Face Hub returned status {response.status_code}."
             try:
@@ -122,6 +123,7 @@ class HubClient:
         sort: str = "downloads",
         limit: int = 20,
         cursor: str | None = None,
+        pipeline_tag: str | None = None,
     ) -> tuple[list[dict[str, Any]], str | None]:
         """Lists models from Hugging Face API with sort and cursor-based pagination."""
         url = f"{HF_API_BASE}/models"
@@ -139,6 +141,8 @@ class HubClient:
         }
         if search:
             params["search"] = search
+        if pipeline_tag:
+            params["pipeline_tag"] = pipeline_tag
         if cursor:
             params["cursor"] = cursor
 
@@ -223,7 +227,12 @@ class HubClient:
         url = f"{HF_HUB_BASE}/{repo_id}/resolve/main/model.safetensors"
         try:
             # 1. Fetch first 8 bytes to get uint64 header size
-            resp = await self._request("GET", url, headers={"Range": "bytes=0-7"})
+            resp = await self._request(
+                "GET",
+                url,
+                headers={"Range": "bytes=0-7"},
+                allowed_status_codes=(200, 206),
+            )
             if len(resp.content) < 8:
                 return None
 
@@ -234,7 +243,12 @@ class HubClient:
 
             # 2. Fetch the JSON header metadata range
             end_byte = 8 + header_len - 1
-            header_resp = await self._request("GET", url, headers={"Range": f"bytes=8-{end_byte}"})
+            header_resp = await self._request(
+                "GET",
+                url,
+                headers={"Range": f"bytes=8-{end_byte}"},
+                allowed_status_codes=(200, 206),
+            )
             header_data = json.loads(header_resp.content.decode("utf-8"))
 
             total_params = 0

@@ -96,6 +96,19 @@
   8. Candidate Evaluation Cap (MAX_CANDIDATES 25 -> 8): Evaluating a single candidate requires multiple upstream Hugging Face HTTP requests (metadata API, config.json fetch, and safetensors Range request). Capping candidate evaluation at 8 instead of 25 is a design choice, unmeasured.
 * **Consequences**: Deterministic grounding, complete auditability over tool calls via SSE, robust rate limiting, and zero risk of hallucinated memory or model statistics.
 
+## ADR-0010: Client-Side Session Storage for Conversation State & Hardware Matching Constraints
+* **Status**: Accepted
+* **Context**: Prior to Phase 5 database persistence, navigating away from `/chat` to view model cards or other routes unmounted the chat view and wiped active conversations. Additionally, every conversation bore the identical hardcoded title, and clicking sidebar items did not swap active conversation streams. On the backend, loose hardware matching silently defaulted to 12.0 GiB VRAM on unknown hardware or system RAM strings (e.g. '32GB RAM').
+* **Decision**:
+  1. Temporary Stopgap: Adopt `sessionStorage` (`modelfit_chat_sessions_v1`) to persist conversation sessions across tab navigations within the browser session. Phase 5 replaces this with PostgreSQL persistence.
+  2. Storage Isolation: Only store user/assistant messages, text content, and recommendation cards. Never store credentials, API keys, or intermediate tool execution events.
+  3. Titles: Dynamically derived from the first user prompt, stripped of markdown symbols and truncated to ~40 characters.
+  4. Sidebar Navigation: Clicking conversations in the sidebar synchronizes the active message state and updates the view via `setMessages`.
+  5. Unambiguous Hardware Matching: Removed silent 12GB default fallback in `estimate_memory` and `recommend_models`. Hardware profiles must match exactly or unambiguously against verified presets. System RAM (e.g. '32GB RAM') is never inferred as VRAM; unmatched or ambiguous hardware returns an explicit `needs_clarification` result.
+  6. Range Request Status Codes: HTTP 206 Partial Content is accepted strictly on safetensors Range request paths, preserving strict HTTP 200 enforcement on standard API and config requests.
+  7. LLM Timeout & High Demand Resiliency: Capped GenAI client calls with `LLM_TIMEOUT_MS = 15000` (15,000 ms per-attempt) and `attempts = 2` with up to 2.0s backoff (design choice, unmeasured). The worst case before timing out is 15s per attempt x 2 attempts + backoff (~32s worst case, not 15s total). Spikes in 503 high demand are surfaced as `LLM_MODEL_BUSY`, and connection/network failures are surfaced as `LLM_NETWORK_ERROR`.
+* **Consequences**: Persistent conversation journeys across model detail views, responsive sidebar navigation, zero silent hardware sizing errors, and immediate feedback during upstream API high-demand spikes or network disconnects.
+
 ## Dependency Justifications
 * `huggingface-hub` (apps/api): Official Hugging Face client library for model metadata structures and ecosystem compatibility.
 * `google-genai` (apps/api): Official Google GenAI SDK for Gemini streaming and function calling in the conversational advisor.

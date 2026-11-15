@@ -19,6 +19,7 @@ import {
   Eye,
   FileCode,
   Tag,
+  MessageSquare,
 } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { paths } from '@/api/schema';
@@ -102,25 +103,36 @@ export default function ModelDetailPage() {
           </Link>
 
           {model && (
-            model.is_supported ? (
+            <div className="flex items-center gap-2">
               <Link
-                href={`/estimator?repo_id=${encodeURIComponent(model.id)}`}
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#22332a] hover:bg-[#2b4135] border border-[#3b5246] hover:border-[#4d6b5c] text-xs font-semibold text-[#a0c5b3] transition-colors shadow-sm"
-                id="estimate-model-btn"
+                href={`/chat?repo_id=${encodeURIComponent(model.id)}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#18231e] hover:bg-[#203029] border border-[#2c3f35] hover:border-[#3c5447] text-xs font-semibold text-[#8eb4a1] hover:text-[#b4d8c5] transition-colors shadow-sm"
+                id="ask-in-chat-btn"
               >
-                <Calculator size={14} />
-                <span>Estimate Memory Footprint</span>
+                <MessageSquare size={13} />
+                <span>Ask in chat</span>
               </Link>
-            ) : (
-              <div
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#18201c] border border-[#26332d] text-xs font-medium text-[#708479] cursor-not-allowed opacity-80"
-                title={model.support_reason_message || 'Model architecture is not supported for estimation'}
-                id="estimate-model-btn-disabled"
-              >
-                <Calculator size={14} className="text-[#55695e]" />
-                <span>Cannot Estimate ({model.support_reason_code || 'Unsupported'})</span>
-              </div>
-            )
+
+              {model.is_supported ? (
+                <Link
+                  href={`/estimator?repo_id=${encodeURIComponent(model.id)}`}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#22332a] hover:bg-[#2b4135] border border-[#3b5246] hover:border-[#4d6b5c] text-xs font-semibold text-[#a0c5b3] transition-colors shadow-sm"
+                  id="estimate-model-btn"
+                >
+                  <Calculator size={14} />
+                  <span>Estimate Memory Footprint</span>
+                </Link>
+              ) : (
+                <div
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#18201c] border border-[#26332d] text-xs font-medium text-[#708479] cursor-not-allowed opacity-80"
+                  title={model.support_reason_message || 'Model architecture is not supported for estimation'}
+                  id="estimate-model-btn-disabled"
+                >
+                  <Calculator size={14} className="text-[#55695e]" />
+                  <span>Cannot Estimate ({model.support_reason_code || 'Unsupported'})</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </header>
