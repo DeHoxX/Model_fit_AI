@@ -1,7 +1,8 @@
 """Tests for ChatService: tool calling loop, round cap, post-check, and prompt injection safety."""
 
-from collections.abc import AsyncIterator
-from typing import Any
+import re
+from collections.abc import AsyncGenerator, AsyncIterator
+from typing import Any, cast
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -262,7 +263,9 @@ async def test_mid_turn_failure_emits_error_and_done_events(db_session: AsyncSes
         events.append(event)
 
     event_types = [e.event for e in events]
-    assert "token" in event_types
+    # Under pre-stream buffering (D-027), unverified buffered text is discarded on failure;
+    # no token events are emitted before the error.
+    assert "token" not in event_types
     assert "error" in event_types
     assert "done" in event_types
     # Verify done is emitted after error
@@ -720,6 +723,92 @@ async def test_round_cap_synthesis_llm_failure_fallback(
         ("RTX 4090", "NVIDIA GeForce RTX 4090", "gpu", 24, False),
         ("RTX 3060 12GB", "NVIDIA GeForce RTX 3060 12GB", "gpu", 12, False),
         ("16GB VRAM", "Custom 16GB VRAM (User-provided)", "gpu", 16, True),
+        # Rule R-E: Unknown GPU names with explicit VRAM
+        (
+            "NVIDIA RTX 4070 12GB",
+            "NVIDIA RTX 4070 12GB (User-provided)",
+            "gpu",
+            12,
+            True,
+        ),
+        (
+            "RTX 4070 12 GB",
+            "RTX 4070 12 GB (User-provided)",
+            "gpu",
+            12,
+            True,
+        ),
+        (
+            "RTX 4070 12GiB",
+            "RTX 4070 12GiB (User-provided)",
+            "gpu",
+            12,
+            True,
+        ),
+        (
+            "RTX 4070 with 12GB VRAM",
+            "RTX 4070 with 12GB VRAM (User-provided)",
+            "gpu",
+            12,
+            True,
+        ),
+        (
+            "12GB RTX 4070",
+            "12GB RTX 4070 (User-provided)",
+            "gpu",
+            12,
+            True,
+        ),
+        # Preset divergence (e.g. RTX 3060 8GB or RTX 4090 32GB)
+        (
+            "RTX 3060 8GB",
+            "RTX 3060 8GB (User-provided)",
+            "gpu",
+            8,
+            True,
+        ),
+        (
+            "RTX 4090 32GB",
+            "RTX 4090 32GB (User-provided)",
+            "gpu",
+            32,
+            True,
+        ),
+        (
+            "RTX 4090 32GB RAM",
+            "NVIDIA GeForce RTX 4090",
+            "gpu",
+            24,
+            False,
+        ),
+        (
+            "RTX 4070 12GB with 32GB RAM",
+            "RTX 4070 12GB (User-provided)",
+            "gpu",
+            12,
+            True,
+        ),
+        (
+            "32GB RAM",
+            None,
+            None,
+            None,
+            False,
+        ),
+        (
+            "RTX 4090 32GB VRAM",
+            "RTX 4090 32GB VRAM (User-provided)",
+            "gpu",
+            32,
+            True,
+        ),
+        (
+            "32 GB of RAM, RTX 3060",
+            "NVIDIA GeForce RTX 3060 12GB",
+            "gpu",
+            12,
+            False,
+        ),
     ],
 )
 def test_hardware_matching_rules(
@@ -748,3 +837,448 @@ def test_hardware_matching_rules(
             assert "user-provided" in assumptions[0].lower()
         else:
             assert assumptions == []
+
+
+def test_sanitize_hardware_name_untrusted_input() -> None:
+    """Verifies that untrusted user hardware names are sanitized (Rule R-F)."""
+    from modelfit.modules.chat.tools import _sanitize_hardware_name
+
+    # Control chars and markdown stripped
+    malicious = "RTX 4070\x00\x1f<script>alert(1)</script>**bold**"
+    sanitized = _sanitize_hardware_name(malicious)
+    assert "\x00" not in sanitized
+    assert "\x1f" not in sanitized
+    assert "<" not in sanitized
+    assert ">" not in sanitized
+    assert "*" not in sanitized
+    assert "RTX 4070" in sanitized
+
+    # Length capped at 64 chars
+    very_long = "NVIDIA GeForce RTX " + "Extreme Super Edition " * 5 + "12GB"
+    capped = _sanitize_hardware_name(very_long, max_length=64)
+    assert len(capped) <= 64
+
+
+def test_post_check_memory_figures_consistency() -> None:
+    """Verifies that memory figures in assistant response match tool outputs (Rule R-C)."""
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    verified_requirements = {"11.0", "11", "12.0", "12", "4.5"}
+    hardware_phrases = {"nvidia rtx 4070 12gb", "32gb ram"}
+
+    # Grounded text using GiB preserved
+    text_ok = "The model needs 11.0 GiB of memory, with 12.0 GiB free headroom."
+    checked_ok = service._post_check_memory_figures(
+        text_ok, verified_requirements, hardware_phrases
+    )
+    assert "11.0 GiB" in checked_ok
+    assert "12.0 GiB" in checked_ok
+
+    # Hallucinated figure (11.80 GB or 15.0 GiB) replaced with safe fallback
+    hallucinated_text = "The model requires 11.80 GB with 15.0 GiB headroom."
+    checked_hallucinated = service._post_check_memory_figures(
+        hallucinated_text, verified_requirements, hardware_phrases
+    )
+    assert "11.80" not in checked_hallucinated
+    assert "15.0" not in checked_hallucinated
+    assert "[refer to card for verified memory requirements]" in checked_hallucinated
+
+
+def test_post_check_nearby_hardware_and_unverified_figures() -> None:
+    """Verifies that an ungrounded memory requirement (11.80 GB) in the same sentence as
+
+    a hardware capacity mention (12GB) is replaced while the hardware name is preserved.
+    """
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    verified_requirements = {"11.0", "11", "12.0", "12", "4.5"}
+    hardware_phrases = {"nvidia rtx 4070 12gb", "32gb ram"}
+
+    # Case 1: 11.80 GB requirement claim directly next to "NVIDIA RTX 4070 12GB" in same sentence
+    sentence_with_hw = (
+        "For your NVIDIA RTX 4070 12GB, the model requires 11.80 GB with 12.0 GiB headroom."
+    )
+    checked_hw = service._post_check_memory_figures(
+        sentence_with_hw, verified_requirements, hardware_phrases
+    )
+    assert "NVIDIA RTX 4070 12GB" in checked_hw
+    assert "11.80" not in checked_hw
+    assert "12.0 GiB" in checked_hw
+    assert "[refer to card for verified memory requirements]" in checked_hw
+
+    # Case 2: 11.80 GB requirement claim in same sentence as user stated "32GB RAM"
+    sentence_with_ram = "With 32GB RAM available, the model requires 11.80 GB total."
+    checked_ram = service._post_check_memory_figures(
+        sentence_with_ram, verified_requirements, hardware_phrases
+    )
+    assert "32GB RAM" in checked_ram
+    assert "11.80" not in checked_ram
+    assert "[refer to card for verified memory requirements]" in checked_ram
+
+    # Case 3: Conflicting requirement figure (e.g. 12 GiB required) close to "12GB" hardware name
+    sentence_conflict = "On your NVIDIA RTX 4070 12GB, the model needs 12 GiB of memory."
+    # 12 is in the hardware name, but not in verified requirements (say only 11.0 is verified)
+    reqs_no_12 = {"11.0", "11", "4.5"}
+    checked_conflict = service._post_check_memory_figures(
+        sentence_conflict, reqs_no_12, hardware_phrases
+    )
+    assert "NVIDIA RTX 4070 12GB" in checked_conflict
+    assert "needs [refer to card for verified memory requirements]" in checked_conflict
+
+
+@pytest.mark.parametrize(
+    ("hw_phrase", "text_input"),
+    [
+        ("NVIDIA RTX 4070 12GB", "For your NVIDIA RTX 4070 12GB, the model fits."),
+        ("RTX 4090 24GB", "Running on an RTX 4090 24GB provides ample headroom."),
+        ("RTX 3060 8 GB", "Your RTX 3060 8 GB profile is user-provided."),
+        ("Apple Mac 16GiB Unified", "Detected Apple Mac 16GiB Unified system."),
+        ("32GB RAM", "Configured with 32GB RAM and discrete GPU."),
+    ],
+)
+def test_post_check_preserves_hardware_names_and_user_ram(
+    hw_phrase: str,
+    text_input: str,
+) -> None:
+    """Verifies that hardware capacity mentions in names or user RAM are preserved."""
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    # Requirement figures only contain 5.0 GiB
+    verified_requirements = {"5.0", "5"}
+    hardware_phrases = {hw_phrase.lower()}
+
+    checked = service._post_check_memory_figures(
+        text_input, verified_requirements, hardware_phrases
+    )
+    # The hardware name and capacity figure must remain intact
+    assert hw_phrase in checked
+    assert "[refer to card for verified memory requirements]" not in checked
+
+
+def test_post_check_catches_conflicting_memory_requirement() -> None:
+    """Verifies that 'needs 12 GiB' is caught even when 12 is in the hardware name.
+
+    Tool output: 11.0 GiB required on NVIDIA RTX 4070 12GB.
+    Assistant text: 'Based on your NVIDIA RTX 4070 12GB, this model needs 12 GiB.'
+    Expected: Hardware name 'NVIDIA RTX 4070 12GB' preserved, but requirement 'needs 12 GiB'
+    is replaced because 12 is not in verified_requirements.
+    """
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    # Tool output returned 11.0 GiB required (not 12 GiB)
+    verified_requirements = {"11.0", "11", "0.4"}
+    hardware_phrases = {"nvidia rtx 4070 12gb", "rtx 4070 12gb (user-provided)"}
+
+    assistant_text = "Based on your NVIDIA RTX 4070 12GB, this model needs 12 GiB of memory."
+    checked = service._post_check_memory_figures(
+        assistant_text, verified_requirements, hardware_phrases
+    )
+
+    # 1. Hardware name is preserved
+    assert "NVIDIA RTX 4070 12GB" in checked
+    # 2. Conflicting requirement claim is replaced
+    assert "needs 12 GiB" not in checked
+    assert "[refer to card for verified memory requirements]" in checked
+
+
+def test_post_check_name_only_in_user_message() -> None:
+    """Verifies that a GPU name stated in the user message preserves its capacity figure."""
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    user_msgs = [{"role": "user", "content": "I have an NVIDIA RTX 4070 12GB for coding"}]
+    hw_phrases: set[str] = set()
+    gpu_pat = re.compile(
+        r"\b(?:nvidia|geforce|rtx|gtx|amd|radeon|rx|intel|arc|"
+        r"apple\s+m\d+(?:\s+(?:pro|max|ultra))?|m\d+(?:\s+(?:pro|max|ultra))?|"
+        r"mac(?:book)?(?:\s+(?:pro|max))?|tesla|quadro|a100|h100|h200|l40|v100)\b"
+        r"[^\n,;]{0,30}?\b\d+\s*(?:gib|gb|g)\b",
+        re.IGNORECASE,
+    )
+    for m in user_msgs:
+        for u_m in gpu_pat.finditer(m["content"]):
+            hw_phrases.add(u_m.group(0).lower().strip())
+
+    text = "Based on your NVIDIA RTX 4070 12GB, here is some info."
+    checked = service._post_check_memory_figures(text, set(), hw_phrases)
+    assert "NVIDIA RTX 4070 12GB" in checked
+
+
+def test_post_check_name_only_in_tool_result() -> None:
+    """Verifies that a hardware name resolved only from a tool result preserves its capacity."""
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    verified_reqs: set[str] = set()
+    hw_phrases: set[str] = set()
+    tool_res = {
+        "resolved_hardware": {
+            "name": "NVIDIA RTX 4070 12GB",
+            "usable_memory_bytes": 12 * 1024**3,
+        }
+    }
+    service._harvest_verified_memory_figures(
+        "recommend_models", tool_res, verified_reqs, hw_phrases
+    )
+
+    text = "Based on your NVIDIA RTX 4070 12GB, here is some info."
+    checked = service._post_check_memory_figures(text, verified_reqs, hw_phrases)
+    assert "NVIDIA RTX 4070 12GB" in checked
+
+
+def test_post_check_name_in_both_user_and_tool() -> None:
+    """Verifies that a hardware name present in both user input and tool result is preserved."""
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    hw_phrases = {"nvidia rtx 4070 12gb"}
+    verified_reqs: set[str] = set()
+    tool_res = {
+        "resolved_hardware": {
+            "name": "NVIDIA RTX 4070 12GB",
+            "usable_memory_bytes": 12 * 1024**3,
+        }
+    }
+    service._harvest_verified_memory_figures(
+        "recommend_models", tool_res, verified_reqs, hw_phrases
+    )
+
+    text = "Based on your NVIDIA RTX 4070 12GB, I recommend Qwen2.5-Coder-7B."
+    checked = service._post_check_memory_figures(text, verified_reqs, hw_phrases)
+    assert "NVIDIA RTX 4070 12GB" in checked
+
+
+def test_post_check_three_caught_cases() -> None:
+    """Verifies the three distinct cases that must still be caught by the post-checker:
+
+    1. Conflicting requirement claim ('needs 12 GiB' vs 11.0 GiB tool result)
+    2. Hallucinated decimal figure ('requires 11.80 GB' vs 11.0 GiB tool result)
+    3. Ungrounded requirement without tool verification ('requires 15.0 GiB')
+    """
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    hw_phrases = {"nvidia rtx 4070 12gb"}
+    verified_reqs = {"11.0", "11"}
+
+    # Case 1: Conflicting requirement figure (needs 12 GiB)
+    text_conflict = "For your NVIDIA RTX 4070 12GB, the model needs 12 GiB of memory."
+    res_conflict = service._post_check_memory_figures(text_conflict, verified_reqs, hw_phrases)
+    assert "NVIDIA RTX 4070 12GB" in res_conflict
+    assert "needs 12 GiB" not in res_conflict
+    assert "[refer to card for verified memory requirements]" in res_conflict
+
+    # Case 2: Hallucinated decimal figure (requires 11.80 GB)
+    text_decimal = "For your NVIDIA RTX 4070 12GB, the model requires 11.80 GB."
+    res_decimal = service._post_check_memory_figures(text_decimal, verified_reqs, hw_phrases)
+    assert "NVIDIA RTX 4070 12GB" in res_decimal
+    assert "11.80" not in res_decimal
+    assert "[refer to card for verified memory requirements]" in res_decimal
+
+    # Case 3: Ungrounded requirement figure without tool verification
+    text_unverified = "The model requires 15.0 GiB of memory."
+    res_unverified = service._post_check_memory_figures(text_unverified, verified_reqs, hw_phrases)
+    assert "15.0" not in res_unverified
+    assert "[refer to card for verified memory requirements]" in res_unverified
+
+
+def test_post_check_user_capacity_grounding_system_ram() -> None:
+    """Verifies that user messages with system RAM ('RTX 4090 32GB RAM') do not treat
+
+    the 32GB as a GPU VRAM capacity phrase.
+    """
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    gpu_pat = re.compile(
+        r"\b(?:nvidia|geforce|rtx|gtx|amd|radeon|rx|intel|arc|"
+        r"apple\s+m\d+(?:\s+(?:pro|max|ultra))?|m\d+(?:\s+(?:pro|max|ultra))?|"
+        r"mac(?:book)?(?:\s+(?:pro|max))?|tesla|quadro|a100|h100|h200|l40|v100)\b"
+        r"[^\n,;]{0,30}?\b\d+\s*(?:gib|gb|g)\b"
+        r"(?!\s*(?:of\s+)?(?:system\s+)?(?:ram|memory))",
+        re.IGNORECASE,
+    )
+    vram_ram_pat = re.compile(
+        r"\b\d+\s*(?:gib|gb|g)\s+(?:vram|ram|system\s+ram)\b|"
+        r"\b(?:vram|ram)\s*(?:of|:)?\s*\d+\s*(?:gib|gb|g)\b",
+        re.IGNORECASE,
+    )
+    user_text = "RTX 4090 32GB RAM, coding model"
+    hw_phrases: set[str] = set()
+    for u_m in gpu_pat.finditer(user_text):
+        hw_phrases.add(u_m.group(0).lower().strip())
+    for u_m in vram_ram_pat.finditer(user_text):
+        hw_phrases.add(u_m.group(0).lower().strip())
+
+    # Verify that "rtx 4090 32gb" was NOT added as a GPU capacity phrase
+    assert "rtx 4090 32gb" not in hw_phrases
+    # Verify that "32gb ram" WAS captured as a system RAM phrase
+    assert "32gb ram" in hw_phrases
+
+    # In post-check: a requirement claim stating "requires 32 GB" outside RAM context is replaced
+    text = "On your RTX 4090 with 32GB RAM, the model requires 32 GB."
+    # Verified tool requirements for RTX 4090 (24 GB)
+    verified_reqs = {"22.0", "22"}
+    checked = service._post_check_memory_figures(text, verified_reqs, hw_phrases)
+    assert "32GB RAM" in checked
+    assert "requires 32 GB" not in checked
+    assert "[refer to card for verified memory requirements]" in checked
+
+
+def test_post_check_clarification_turn_preserves_user_echo() -> None:
+    """Verifies that in a clarification turn with no tool results, echoing the user's
+
+    stated '32GB' figure twice remains intact and is not replaced by fallback text.
+    """
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    # User stated "32GB RAM" in the query
+    user_figures = {"32"}
+    hw_phrases = {"32gb ram"}
+    # In a clarification turn, no tool was executed (empty verified requirements)
+    verified_reqs: set[str] = set()
+
+    assistant_clarification = (
+        "Is this 32GB system RAM (CPU memory), or are you using an Apple Mac with "
+        "32GB Unified Memory?"
+    )
+    checked = service._post_check_memory_figures(
+        assistant_clarification, verified_reqs, hw_phrases, user_figures
+    )
+    # Both "32GB" echoes must remain intact
+    assert checked.count("32GB") == 2
+    assert "[refer to card for verified memory requirements]" not in checked
+
+
+def test_post_check_unified_memory_echo() -> None:
+    """Verifies that an echo of user-stated '16GB unified memory' remains intact."""
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    user_figures = {"16"}
+    hw_phrases = {"16gb unified memory"}
+    verified_reqs: set[str] = set()
+
+    assistant_text = "With 16GB unified memory, what task would you like to run?"
+    checked = service._post_check_memory_figures(
+        assistant_text, verified_reqs, hw_phrases, user_figures
+    )
+    assert "16GB" in checked
+    assert "[refer to card for verified memory requirements]" not in checked
+
+
+def test_post_check_gpu_and_ram_user_echo() -> None:
+    """Verifies that user message 'RTX 4090 32GB RAM' allows assistant to echo 32GB RAM
+
+    while strictly validating requirement figures against tool outputs.
+    """
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    user_figures = {"32"}
+    hw_phrases = {"32gb ram", "nvidia geforce rtx 4090"}
+    verified_reqs = {"12.0", "12"}
+
+    assistant_text = "For your RTX 4090 with 32GB RAM, the model requires 12.0 GiB."
+    checked = service._post_check_memory_figures(
+        assistant_text, verified_reqs, hw_phrases, user_figures
+    )
+    assert "32GB RAM" in checked
+    assert "12.0 GiB" in checked
+    assert "[refer to card for verified memory requirements]" not in checked
+
+
+def test_post_check_clarification_turn_still_replaces_unverified_requirements() -> None:
+    """Verifies that if the assistant claims a requirement without a tool result in a clarification
+
+    turn, the ungrounded requirement is replaced even though user echoes are preserved.
+    """
+    from modelfit.modules.chat.service import ChatService
+
+    service = ChatService()
+    user_figures = {"32"}
+    hw_phrases = {"32gb ram"}
+    verified_reqs: set[str] = set()
+
+    # Assistant invents a requirement figure without tool execution
+    assistant_hallucination = "For your 32GB RAM setup, the model requires 16.0 GiB of memory."
+    checked = service._post_check_memory_figures(
+        assistant_hallucination, verified_reqs, hw_phrases, user_figures
+    )
+    # User echo preserved
+    assert "32GB RAM" in checked
+    # Invented requirement claim replaced
+    assert "16.0" not in checked
+    assert "[refer to card for verified memory requirements]" in checked
+
+
+@pytest.mark.asyncio
+async def test_chat_service_emits_final_answer_exactly_once(db_session: AsyncSession) -> None:
+    """Verifies that answer text is emitted exactly once with no duplication or diff wrappers."""
+    from modelfit.modules.chat.service import ChatService
+
+    fake_client = FakeScriptedLLMClient()
+    # Turn 1: LLM calls recommend_models for RTX 4070 12GB
+    fake_client.queue_turn(
+        [
+            FakeStreamChunk(
+                function_calls=[
+                    FakeFunctionCall(
+                        name="recommend_models",
+                        args={"hardware_name": "NVIDIA RTX 4070 12GB", "task": "coding"},
+                    )
+                ]
+            )
+        ]
+    )
+    # Turn 2: LLM generates final answer
+    fake_client.queue_turn(
+        [FakeStreamChunk(text="Based on your NVIDIA RTX 4070 12GB, I recommend Qwen2.5-Coder-7B.")]
+    )
+
+    chat_service = ChatService(llm_client=fake_client)
+    events = []
+    async for event in chat_service.process_chat(
+        messages=[{"role": "user", "content": "NVIDIA RTX 4070 12GB, coding model"}],
+        session=db_session,
+    ):
+        events.append(event)
+
+    # Extract all token events
+    token_events = [e for e in events if e.event == "token"]
+    assert len(token_events) == 1
+    token_text = token_events[0].data["text"]
+
+    # Verify no diff wrapper or duplication
+    assert "(Note: Corrected" not in token_text
+    assert token_text.count("Qwen2.5-Coder-7B") == 1
+    assert "NVIDIA RTX 4070 12GB" in token_text
+
+
+@pytest.mark.asyncio
+async def test_chat_service_cancel_during_buffer(db_session: AsyncSession) -> None:
+    """Verifies that aborting/cancelling during stream buffering exits cleanly without error."""
+    from modelfit.modules.chat.service import ChatService
+
+    fake_client = FakeScriptedLLMClient()
+    fake_client.queue_turn(
+        [
+            FakeStreamChunk(text="First half of buffered response"),
+            FakeStreamChunk(text=" second half"),
+        ]
+    )
+
+    chat_service = ChatService(llm_client=fake_client)
+    generator = chat_service.process_chat(
+        messages=[{"role": "user", "content": "Hello"}],
+        session=db_session,
+    )
+
+    # Client initiates cancel by closing the async generator prematurely
+    await cast(AsyncGenerator[Any, None], generator).aclose()
+    # Successfully closed without unhandled exceptions

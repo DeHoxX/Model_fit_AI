@@ -42,6 +42,11 @@ export const RecommendationCardView: React.FC<RecommendationCardViewProps> = ({ 
     ? `${candidate.context_length.toLocaleString()} tokens`
     : '8,192 tokens';
 
+  const hw = candidate.resolved_hardware || est.resolved_hardware;
+  const hwName = hw?.name || 'Target Hardware';
+  const hwUsableGiB = hw ? toGiB(hw.usable_memory_bytes) : null;
+  const isUserProvided = hw?.profile_type === 'user_provided';
+
   return (
     <div
       data-testid="recommendation-card"
@@ -65,6 +70,20 @@ export const RecommendationCardView: React.FC<RecommendationCardViewProps> = ({ 
             <span>By {candidate.author}</span>
             <span>•</span>
             <span>License: {candidate.license || 'unknown'}</span>
+            {hw && (
+              <>
+                <span>•</span>
+                <span className="inline-flex items-center gap-1">
+                  <span>Hardware: {hwName}</span>
+                  {hwUsableGiB && <span>({hwUsableGiB} GiB usable)</span>}
+                  {isUserProvided && (
+                    <span className="text-[10px] px-1 py-0.2 bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 rounded border border-amber-300 dark:border-amber-800">
+                      User-provided
+                    </span>
+                  )}
+                </span>
+              </>
+            )}
           </div>
         </div>
 

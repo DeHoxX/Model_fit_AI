@@ -48,6 +48,7 @@ class CustomHardwareInput(BaseModel):
             memory_bytes=int(self.memory_gib * gib_to_bytes),
             kind=self.kind,
             reserved_memory_bytes=int(self.reserved_memory_gib * gib_to_bytes),
+            is_preset=False,
         )
 
 

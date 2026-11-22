@@ -30,6 +30,7 @@ from modelfit.modules.estimator.schemas import (
     HardwareProfileInput,
     InferenceRuntime,
     NormalizedModel,
+    ResolvedHardware,
     Verdict,
 )
 
@@ -165,6 +166,13 @@ def estimate_memory(
 
     # If unsupported or missing fields: return cannot_estimate cleanly without raising
     if unsupported_reasons:
+        profile_type = "preset" if getattr(hardware, "is_preset", True) else "user_provided"
+        usable_memory = hardware.memory_bytes - hardware.reserved_memory_bytes
+        resolved_hw = ResolvedHardware(
+            name=hardware.name,
+            usable_memory_bytes=usable_memory,
+            profile_type=profile_type,
+        )
         return EstimationResult(
             weights_bytes=0,
             kv_cache_bytes=0,
@@ -178,6 +186,7 @@ def estimate_memory(
             warnings=warnings,
             unsupported_reasons=unsupported_reasons,
             confidence=ConfidenceLevel.LOW,
+            resolved_hardware=resolved_hw,
         )
 
     # 3. Check context length overflow warning
@@ -238,6 +247,13 @@ def estimate_memory(
     else:
         confidence = ConfidenceLevel.LOW
 
+    profile_type = "preset" if getattr(hardware, "is_preset", True) else "user_provided"
+    resolved_hw = ResolvedHardware(
+        name=hardware.name,
+        usable_memory_bytes=usable_memory,
+        profile_type=profile_type,
+    )
+
     return EstimationResult(
         weights_bytes=weights_bytes,
         kv_cache_bytes=kv_cache_bytes,
@@ -251,4 +267,5 @@ def estimate_memory(
         warnings=warnings,
         unsupported_reasons=[],
         confidence=confidence,
+        resolved_hardware=resolved_hw,
     )

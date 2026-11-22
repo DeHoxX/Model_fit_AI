@@ -74,6 +74,16 @@ class HardwareService:
             message = (
                 detail.support_reason_message or "Model is not supported for memory estimation."
             )
+            is_pres = getattr(request.hardware, "is_preset", True)
+            profile_type = "preset" if is_pres else "user_provided"
+            usable_memory = request.hardware.memory_bytes - request.hardware.reserved_memory_bytes
+            from modelfit.modules.estimator.schemas import ResolvedHardware
+
+            resolved_hw = ResolvedHardware(
+                name=request.hardware.name,
+                usable_memory_bytes=usable_memory,
+                profile_type=profile_type,
+            )
             return EstimationResult(
                 weights_bytes=0,
                 kv_cache_bytes=0,
@@ -87,6 +97,7 @@ class HardwareService:
                 warnings=[],
                 unsupported_reasons=[f"{reason}: {message}"],
                 confidence=ConfidenceLevel.LOW,
+                resolved_hardware=resolved_hw,
             )
 
         return self.estimate(detail.normalized_model, request.config, request.hardware)

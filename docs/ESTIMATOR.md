@@ -99,6 +99,24 @@ Let:
 $$\text{Usable Memory} = \text{memory\_bytes} - \text{reserved\_memory\_bytes}$$
 $$\text{Usage Ratio} = \frac{\text{total\_bytes}}{\text{Usable Memory}}$$
 
+#### 2.6.1 Reserved Memory Rules
+`reserved_memory_bytes` models memory held by operating systems, display servers, or background frameworks. It is computed according to the following deterministic rules:
+
+- **Verified Preset Consumer GPUs** (e.g. RTX 3060, RTX 4090):
+  Preset values reserve 512 MiB (0.5 GiB) to 1024 MiB (1.0 GiB) for display contexts and OS compositor tasks [TODO(verify)].
+- **Verified Preset Datacenter GPUs** (e.g. A100, H100):
+  Preset values reserve 0 bytes (0.0 GiB); dedicated headless compute accelerators dedicate 100% of physical memory to compute workloads.
+- **Verified Preset Apple Silicon Unified Memory** (e.g. Apple Mac 16GB / 32GB Unified):
+  Preset values reserve 3 GiB (for 16GB systems) and 4 GiB (for 32GB systems) for macOS graphics and kernel tasks [TODO(verify)].
+- **Custom / User-Provided GPU Profiles** (e.g. "RTX 4070 12GB", explicit VRAM queries):
+  Custom GPU profiles apply a standard deterministic **5%** reservation (`int(total_bytes * 0.05)`).
+- **Custom Apple Silicon Profiles** (e.g. 24GB, 64GB, 128GB Unified):
+  Custom Apple Silicon profiles apply a standard **20%** reservation (`int(total_bytes * 0.20)`) for macOS and system tasks.
+- **Direct HTTP API (`CustomHardwareInput`)**:
+  When creating ad-hoc custom hardware profiles via direct HTTP API requests, `reserved_memory_gib` defaults to `0` unless explicitly provided by the caller.
+- **CPU System RAM**:
+  System RAM alone (`cpu_ram`) is not treated as VRAM; queries specifying only system RAM return clarification requests.
+
 - **Verdict Rules**:
   - `cannot_estimate`: If required fields are missing or architecture is unsupported.
   - `fits`: $\text{Usage Ratio} \le 0.90$

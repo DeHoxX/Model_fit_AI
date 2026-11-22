@@ -228,6 +228,16 @@
             ],
             "title": "Per Device Bytes"
           },
+          "resolved_hardware": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedHardware"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "runtime_overhead_bytes": {
             "title": "Runtime Overhead Bytes",
             "type": "integer"
@@ -297,6 +307,12 @@
         "additionalProperties": false,
         "description": "Hardware profile specification in bytes.",
         "properties": {
+          "is_preset": {
+            "default": true,
+            "description": "Whether this profile originates from a verified preset",
+            "title": "Is Preset",
+            "type": "boolean"
+          },
           "kind": {
             "$ref": "#/components/schemas/HardwareKind",
             "default": "gpu"
@@ -938,6 +954,16 @@
             "title": "Rank Reasons",
             "type": "array"
           },
+          "resolved_hardware": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedHardware"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "runtime": {
             "default": "llama_cpp",
             "title": "Runtime",
@@ -1123,6 +1149,32 @@
           }
         },
         "title": "RequirementSpec",
+        "type": "object"
+      },
+      "ResolvedHardware": {
+        "additionalProperties": false,
+        "description": "Resolved hardware details associated with an estimate or recommendation card.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "profile_type": {
+            "description": "'preset' or 'user_provided'",
+            "title": "Profile Type",
+            "type": "string"
+          },
+          "usable_memory_bytes": {
+            "title": "Usable Memory Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "usable_memory_bytes",
+          "profile_type"
+        ],
+        "title": "ResolvedHardware",
         "type": "object"
       },
       "ScoringBreakdown": {
@@ -1489,6 +1541,24 @@
               ],
               "description": "Opaque cursor for pagination",
               "title": "Cursor"
+            }
+          },
+          {
+            "description": "Hugging Face pipeline tag filter",
+            "in": "query",
+            "name": "pipeline_tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hugging Face pipeline tag filter",
+              "title": "Pipeline Tag"
             }
           }
         ],

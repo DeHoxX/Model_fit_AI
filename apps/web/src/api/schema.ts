@@ -301,6 +301,7 @@ export interface components {
             kv_cache_bytes: number;
             /** Per Device Bytes */
             per_device_bytes?: number | null;
+            resolved_hardware?: components["schemas"]["ResolvedHardware"] | null;
             /** Runtime Overhead Bytes */
             runtime_overhead_bytes: number;
             /** Total Bytes */
@@ -328,6 +329,12 @@ export interface components {
          * @description Hardware profile specification in bytes.
          */
         HardwareProfileInput: {
+            /**
+             * Is Preset
+             * @description Whether this profile originates from a verified preset
+             * @default true
+             */
+            is_preset: boolean;
             /** @default gpu */
             kind: components["schemas"]["HardwareKind"];
             /**
@@ -588,6 +595,7 @@ export interface components {
             quantization: string;
             /** Rank Reasons */
             rank_reasons?: string[];
+            resolved_hardware?: components["schemas"]["ResolvedHardware"] | null;
             /**
              * Runtime
              * @default llama_cpp
@@ -669,6 +677,21 @@ export interface components {
              * @description Target use case for the model.
              */
             task?: ("general" | "coding" | "reasoning" | "writing") | null;
+        };
+        /**
+         * ResolvedHardware
+         * @description Resolved hardware details associated with an estimate or recommendation card.
+         */
+        ResolvedHardware: {
+            /** Name */
+            name: string;
+            /**
+             * Profile Type
+             * @description 'preset' or 'user_provided'
+             */
+            profile_type: string;
+            /** Usable Memory Bytes */
+            usable_memory_bytes: number;
         };
         /**
          * ScoringBreakdown
@@ -879,6 +902,8 @@ export interface operations {
                 limit?: number;
                 /** @description Opaque cursor for pagination */
                 cursor?: string | null;
+                /** @description Hugging Face pipeline tag filter */
+                pipeline_tag?: string | null;
             };
             header?: never;
             path?: never;

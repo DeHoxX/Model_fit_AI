@@ -141,6 +141,19 @@ class HardwareProfileInput(BaseModel):
     reserved_memory_bytes: int = Field(
         default=0, ge=0, description="Memory reserved for OS or display in bytes"
     )
+    is_preset: bool = Field(
+        default=True, description="Whether this profile originates from a verified preset"
+    )
+
+
+class ResolvedHardware(BaseModel):
+    """Resolved hardware details associated with an estimate or recommendation card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    usable_memory_bytes: int
+    profile_type: str = Field(description="'preset' or 'user_provided'")
 
 
 class Verdict(str, Enum):
@@ -173,3 +186,4 @@ class EstimationResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     unsupported_reasons: list[str] = Field(default_factory=list)
     confidence: ConfidenceLevel
+    resolved_hardware: ResolvedHardware | None = None

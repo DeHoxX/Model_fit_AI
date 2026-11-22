@@ -511,3 +511,47 @@ def test_tensor_parallelism_sharding_and_validation() -> None:
         + res.runtime_overhead_bytes
     )
     assert res.per_device_bytes == expected_device_bytes
+
+
+def test_resolved_hardware_in_estimation_result() -> None:
+    """Verifies that resolved hardware details are attached to EstimationResult."""
+    model = NormalizedModel(
+        id="llama-test",
+        architecture_name="llama",
+        total_params=7_000_000_000,
+        num_layers=32,
+        hidden_size=4096,
+        num_attention_heads=32,
+        num_kv_heads=32,
+        head_dim=128,
+    )
+    config = EstimationConfig(
+        quantization=QuantizationFormat.Q4_K_M,
+        context_length=2048,
+    )
+    # 1. Preset hardware
+    hw_preset = HardwareProfileInput(
+        name="NVIDIA GeForce RTX 4090",
+        memory_bytes=24 * 1024 * 1024 * 1024,
+        reserved_memory_bytes=1024 * 1024 * 1024,
+        is_preset=True,
+    )
+    res_preset = estimate_memory(model, config, hw_preset)
+    assert res_preset.resolved_hardware is not None
+    assert res_preset.resolved_hardware.name == "NVIDIA GeForce RTX 4090"
+    assert res_preset.resolved_hardware.profile_type == "preset"
+    assert res_preset.resolved_hardware.usable_memory_bytes == 23 * 1024 * 1024 * 1024
+
+    # 2. User-provided custom hardware
+    hw_custom = HardwareProfileInput(
+        name="RTX 4070 12GB (User-provided)",
+        memory_bytes=12 * 1024 * 1024 * 1024,
+        reserved_memory_bytes=int(12 * 1024 * 1024 * 1024 * 0.05),
+        is_preset=False,
+    )
+    res_custom = estimate_memory(model, config, hw_custom)
+    assert res_custom.resolved_hardware is not None
+    assert res_custom.resolved_hardware.name == "RTX 4070 12GB (User-provided)"
+    assert res_custom.resolved_hardware.profile_type == "user_provided"
+    expected_usable = hw_custom.memory_bytes - hw_custom.reserved_memory_bytes
+    assert res_custom.resolved_hardware.usable_memory_bytes == expected_usable

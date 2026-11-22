@@ -85,6 +85,7 @@ class RecommendService:
                 memory_bytes=spec.hardware.memory_bytes,
                 kind=spec.hardware.kind,
                 reserved_memory_bytes=spec.hardware.reserved_memory_bytes,
+                is_preset=spec.hardware.is_preset,
             )
         else:
             budget = spec.memory_budget_bytes or 8 * (1024**3)
@@ -93,6 +94,7 @@ class RecommendService:
                 memory_bytes=budget,
                 kind=HardwareKind.GPU,
                 reserved_memory_bytes=int(budget * 0.05),
+                is_preset=False,
             )
 
         # 3. Retrieve candidates by querying catalogue using task search terms
@@ -206,6 +208,7 @@ class RecommendService:
                         kv_cache_dtype=cfg.kv_cache_dtype.value,
                         runtime=cfg.runtime.value,
                         context_length=cfg.context_length,
+                        resolved_hardware=est.resolved_hardware,
                     )
                 )
 

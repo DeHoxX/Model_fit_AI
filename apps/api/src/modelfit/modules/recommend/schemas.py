@@ -6,6 +6,7 @@ from modelfit.modules.estimator.schemas import (
     EstimationResult,
     HardwareProfileInput,
     QuantizationFormat,
+    ResolvedHardware,
 )
 
 
@@ -76,6 +77,7 @@ class RecommendationCandidate(BaseModel):
     kv_cache_dtype: str = "fp16"
     runtime: str = "llama_cpp"
     context_length: int = 8192
+    resolved_hardware: ResolvedHardware | None = None
 
 
 class ClarificationNeeded(BaseModel):

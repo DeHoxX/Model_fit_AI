@@ -208,3 +208,40 @@ async def test_recommend_deterministic_ranking_and_filtering(db_session: AsyncSe
 def test_headroom_and_license_scoring_weights() -> None:
     """Verifies that scoring constants match the documentation design choices."""
     assert round(WEIGHT_HEADROOM + WEIGHT_DOWNLOADS + WEIGHT_RECENCY + WEIGHT_LICENSE, 2) == 1.00
+
+
+@pytest.mark.asyncio
+async def test_recommendations_and_card_figures_use_same_unit_and_values(
+    db_session: AsyncSession,
+) -> None:
+    """Verifies that candidates, card data, and tool results use the exact same unit and values."""
+    from modelfit.modules.chat.tools import execute_tool
+
+    # Call recommend_models via execute_tool with a custom GPU
+    tool_res = await execute_tool(
+        "recommend_models",
+        {
+            "task": "general",
+            "hardware_name": "RTX 4070 12GB",
+        },
+        session=db_session,
+    )
+    # 1. Tool result contains candidates
+    recs = tool_res.get("recommendations", [])
+    assert isinstance(recs, list)
+    for cand in recs:
+        est = cand["estimate"]
+        # Candidate and estimate contain resolved hardware
+        res_hw = cand.get("resolved_hardware") or est.get("resolved_hardware")
+        assert res_hw is not None
+        assert "4070" in res_hw["name"]
+        assert res_hw["profile_type"] == "user_provided"
+
+        # Check preformatted GiB dictionary
+        fmt = cand.get("formatted_gib")
+        assert fmt is not None
+        total_gib_calc = f"{est['total_bytes'] / (1024**3):.1f} GiB"
+        headroom_gib_calc = f"{est['headroom_bytes'] / (1024**3):.1f} GiB"
+        # Tool formatted figures match exact binary GiB calculations
+        assert fmt["total"] == total_gib_calc
+        assert fmt["headroom"] == headroom_gib_calc

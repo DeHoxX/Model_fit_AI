@@ -36,9 +36,84 @@ def _load_hardware_presets() -> list[dict[str, Any]]:
     return []
 
 
+def _sanitize_hardware_name(name: str, max_length: int = 64) -> str:
+    """Sanitizes user-provided hardware names (Rule R-F).
+
+    Strips control characters, collapses whitespace, removes markdown formatting,
+    and caps length to avoid prompt injection or UI breakages.
+    """
+    # Remove ASCII control chars (0x00-0x1f, 0x7f)
+    cleaned = re.sub(r"[\x00-\x1f\x7f]", "", name)
+    # Strip markdown / html markers
+    cleaned = re.sub(r"[`*_<>\[\]]", "", cleaned)
+    # Collapse multiple whitespaces
+    cleaned = " ".join(cleaned.split())
+    if len(cleaned) > max_length:
+        cleaned = cleaned[:max_length].rstrip()
+    return cleaned or "Custom Hardware"
+
+
+RAM_PHRASE_PATTERN = re.compile(
+    r"(?i)\b\d+\s*(?:gib|gb|g)\s*(?:of\s+)?(?:system\s+)?(?:ram|system\s+ram|system\s+memory|memory\s+of\s+system|memory)\b"
+    r"|\b(?:system\s+)?(?:ram|system\s+ram|system\s+memory|memory\s+of\s+system|memory)\s*(?:of|:)?\s*\d+\s*(?:gib|gb|g)\b"
+)
+
+RAM_CONNECTOR_PATTERN = re.compile(
+    r"(?i)(?:,\s*|\b(?:with|and)\s+)?(?:"
+    r"\b\d+\s*(?:gib|gb|g)\s*(?:of\s+)?(?:system\s+)?(?:ram|system\s+ram|system\s+memory|memory\s+of\s+system|memory)\b"
+    r"|\b(?:system\s+)?(?:ram|system\s+ram|system\s+memory|memory\s+of\s+system|memory)\s*(?:of|:)?\s*\d+\s*(?:gib|gb|g)\b"
+    r")(?:\s*,\s*|\s+(?:with|and)\b)?"
+)
+
+
+def _clean_hardware_query(query: str) -> str:
+    """Strips system RAM mentions from a hardware query string for number extraction
+
+    and preset matching only.
+    """
+    cleaned = RAM_CONNECTOR_PATTERN.sub(" ", query)
+    cleaned = re.sub(r"[,;]+", " ", cleaned)
+    return " ".join(cleaned.split())
+
+
+def _extract_display_name(query: str) -> str:
+    """Extracts the display name for a user-provided profile from the query (Rule R-F).
+
+    Preserves the user's exact hardware phrase and capitalization (including brand prefixes
+    like 'NVIDIA' and prepositions like 'with'), stripping only system RAM phrases and their
+    immediate connectors (e.g. 'with 32GB RAM'), and sanitizing via _sanitize_hardware_name.
+    """
+    cleaned = RAM_CONNECTOR_PATTERN.sub(" ", query)
+    cleaned = re.sub(r"[,;]+", " ", cleaned)
+    cleaned = " ".join(cleaned.split())
+    return _sanitize_hardware_name(cleaned)
+
+
 def _extract_gb(text: str) -> int | None:
-    match = re.search(r"\b(\d+)\s*(?:gb|g)\b", text, re.IGNORECASE)
+    match = re.search(r"\b(\d+)\s*(?:gib|gb|g)\b", text, re.IGNORECASE)
     return int(match.group(1)) if match else None
+
+
+def _format_gib_dict(
+    total_bytes: int,
+    headroom_bytes: int,
+    weights_bytes: int = 0,
+    kv_cache_bytes: int = 0,
+    activation_bytes: int = 0,
+    runtime_overhead_bytes: int = 0,
+    usable_memory_bytes: int = 0,
+) -> dict[str, str]:
+    """Generates preformatted GiB strings for grounding LLM explanations (Rule R-C)."""
+    gib = 1024**3
+    return {
+        "total": f"{total_bytes / gib:.1f} GiB",
+        "headroom": f"{headroom_bytes / gib:.1f} GiB",
+        "weights": f"{weights_bytes / gib:.1f} GiB",
+        "kv_cache": f"{kv_cache_bytes / gib:.1f} GiB",
+        "activations": f"{activation_bytes / gib:.1f} GiB",
+        "runtime_overhead": f"{runtime_overhead_bytes / gib:.1f} GiB",
+        "usable_memory": f"{usable_memory_bytes / gib:.1f} GiB",
+    }
 
 
 def _match_hardware_profile(
@@ -97,26 +172,30 @@ def _match_hardware_profile(
         )
         return hw, assumptions
 
-    # Check for explicit VRAM request (e.g. "16GB VRAM")
-    if re.search(r"\b\d+\s*gb\s+vram\b", q_lower):
-        gb = _extract_gb(query)
-        if gb and gb > 0:
-            total_bytes = int(gb * (1024**3))
-            hw = HardwareProfileInput(
-                name=f"Custom {gb}GB VRAM (User-provided)",
-                memory_bytes=total_bytes,
-                kind=HardwareKind.GPU,
-                reserved_memory_bytes=int(total_bytes * 0.05),
-            )
-            assumptions.append(f"GPU VRAM capacity ({gb}GB) is user-provided.")
-            return hw, assumptions
-
-    # Discrete GPU matching: strip system RAM tokens
-    cleaned = re.sub(r"(?i)\b\d+\s*gb\s+(?:system\s+)?ram\b", "", query).strip()
+    # Discrete GPU matching: strip system RAM tokens first so they are never confused with VRAM
+    cleaned = _clean_hardware_query(query)
     q_norm = " ".join(cleaned.lower().split())
     if not q_norm:
         # User only specified system RAM -> clarification, never treat RAM as VRAM
         return None, []
+
+    explicit_gb = _extract_gb(cleaned)
+
+    # Check for pure explicit VRAM request with no specific GPU name (e.g. "16GB VRAM")
+    gpu_keywords = ("rtx", "gtx", "radeon", "a100", "h100", "geforce", "nvidia", "amd", "intel")
+    is_vram_query = bool(re.search(r"\b\d+\s*(?:gib|gb|g)\s+vram\b", q_lower))
+    has_kw = any(kw in q_lower for kw in gpu_keywords)
+    if is_vram_query and not has_kw and explicit_gb and explicit_gb > 0:
+        total_bytes = int(explicit_gb * (1024**3))
+        hw = HardwareProfileInput(
+            name=f"Custom {explicit_gb}GB VRAM (User-provided)",
+            memory_bytes=total_bytes,
+            kind=HardwareKind.GPU,
+            reserved_memory_bytes=int(total_bytes * 0.05),
+            is_preset=False,
+        )
+        assumptions.append(f"GPU VRAM capacity ({explicit_gb}GB) is user-provided with 5% reserve.")
+        return hw, assumptions
 
     matches = []
     for p in profiles:
@@ -147,6 +226,27 @@ def _match_hardware_profile(
 
     if len(matches) == 1:
         _, m_name, m_kind, m_bytes, m_res = matches[0]
+        preset_gb = round(m_bytes / (1024**3))
+
+        # Item 1 Amendment: If the user specified an explicit VRAM differing from the matched preset
+        # (e.g. "RTX 3060 8GB" vs 12GB preset, or "RTX 4090 32GB" vs 24GB preset),
+        # do NOT silently use the preset! Create a user-provided profile with the user's VRAM.
+        if explicit_gb and explicit_gb > 0 and explicit_gb != preset_gb:
+            total_bytes = int(explicit_gb * (1024**3))
+            safe_name = _extract_display_name(query)
+            hw = HardwareProfileInput(
+                name=f"{safe_name} (User-provided)",
+                memory_bytes=total_bytes,
+                kind=HardwareKind.GPU,
+                reserved_memory_bytes=int(total_bytes * 0.05),
+                is_preset=False,
+            )
+            assumptions.append(
+                f"GPU VRAM capacity ({explicit_gb}GB) for '{safe_name}' is user-provided "
+                f"(differs from standard preset {m_name} with {preset_gb}GB); 5% reserve assumed."
+            )
+            return hw, assumptions
+
         kind_val = HardwareKind.GPU
         with contextlib.suppress(ValueError):
             kind_val = HardwareKind(m_kind)
@@ -155,9 +255,31 @@ def _match_hardware_profile(
             memory_bytes=m_bytes,
             kind=kind_val,
             reserved_memory_bytes=m_res,
+            is_preset=True,
         )
         return hw, []
 
+    # Rule R-E: Unknown GPU name + explicit VRAM = user-provided profile
+    # Named as the user wrote it (sanitized, Rule R-F), with an assumption note.
+    # Never a proxy GPU, never a silent default.
+    if explicit_gb and explicit_gb > 0:
+        total_bytes = int(explicit_gb * (1024**3))
+        safe_name = _extract_display_name(query)
+        hw = HardwareProfileInput(
+            name=f"{safe_name} (User-provided)",
+            memory_bytes=total_bytes,
+            kind=HardwareKind.GPU,
+            reserved_memory_bytes=int(total_bytes * 0.05),
+            is_preset=False,
+        )
+        assumptions.append(
+            f"GPU VRAM capacity ({explicit_gb}GB) for '{safe_name}' is user-provided "
+            "with standard 5% reservation."
+        )
+        return hw, assumptions
+
+    # Unknown GPU name WITHOUT explicit VRAM (e.g. "4090 Ti", "4090 D", "RTX 5090")
+    # Must still return None to trigger clarification (existing test must keep passing).
     return None, []
 
 
@@ -358,27 +480,29 @@ async def execute_tool(
             res_dict = dict(est_res.model_dump())
             if assumptions:
                 res_dict["assumptions"] = assumptions
+
+            # Add preformatted GiB strings to tool result (chat/tool layer only, Rule R-C)
+            usable_bytes = (
+                est_res.resolved_hardware.usable_memory_bytes
+                if est_res.resolved_hardware
+                else (hw_input.memory_bytes - hw_input.reserved_memory_bytes)
+            )
+            res_dict["formatted_gib"] = _format_gib_dict(
+                total_bytes=est_res.total_bytes,
+                headroom_bytes=est_res.headroom_bytes,
+                weights_bytes=est_res.weights_bytes,
+                kv_cache_bytes=est_res.kv_cache_bytes,
+                activation_bytes=est_res.activation_bytes,
+                runtime_overhead_bytes=est_res.runtime_overhead_bytes,
+                usable_memory_bytes=usable_bytes,
+            )
             return res_dict
 
         elif name == "recommend_models":
             validated_rec = RecommendModelsArgs.model_validate(args)
             hw_input = None
             rec_assumptions: list[str] = []
-            if validated_rec.memory_budget_gb and validated_rec.memory_budget_gb > 0:
-                budget = int(validated_rec.memory_budget_gb * (1024**3))
-                hw_name = (
-                    validated_rec.hardware_name or f"Custom {validated_rec.memory_budget_gb}GB VRAM"
-                )
-                hw_input = HardwareProfileInput(
-                    name=hw_name,
-                    memory_bytes=budget,
-                    kind=HardwareKind.GPU,
-                    reserved_memory_bytes=int(budget * 0.05),
-                )
-                rec_assumptions.append(
-                    f"GPU VRAM budget ({validated_rec.memory_budget_gb}GB) is user-provided."
-                )
-            elif validated_rec.hardware_name:
+            if validated_rec.hardware_name:
                 rec_hw_list: list[Any] = await hardware_service.list_profiles(session)
                 if not rec_hw_list:
                     rec_hw_list = _load_hardware_presets()
@@ -386,7 +510,7 @@ async def execute_tool(
                 hw_input, rec_assumptions = _match_hardware_profile(
                     validated_rec.hardware_name, list(rec_hw_list)
                 )
-                if not hw_input:
+                if not hw_input and not validated_rec.memory_budget_gb:
                     return {
                         "status": "error",
                         "error_type": "clarification_required",
@@ -400,7 +524,24 @@ async def execute_tool(
                             "Please specify your exact GPU model or an explicit VRAM budget in GB."
                         ),
                     }
-            else:
+            has_budget = bool(validated_rec.memory_budget_gb and validated_rec.memory_budget_gb > 0)
+            if not hw_input and has_budget and validated_rec.memory_budget_gb:
+                budget = int(validated_rec.memory_budget_gb * (1024**3))
+                raw_name = (
+                    validated_rec.hardware_name or f"Custom {validated_rec.memory_budget_gb}GB VRAM"
+                )
+                safe_name = _sanitize_hardware_name(raw_name)
+                hw_input = HardwareProfileInput(
+                    name=safe_name,
+                    memory_bytes=budget,
+                    kind=HardwareKind.GPU,
+                    reserved_memory_bytes=int(budget * 0.05),
+                    is_preset=False,
+                )
+                rec_assumptions.append(
+                    f"GPU VRAM budget ({validated_rec.memory_budget_gb}GB) is user-provided."
+                )
+            elif not hw_input:
                 return {
                     "status": "error",
                     "error_type": "clarification_required",
@@ -445,6 +586,30 @@ async def execute_tool(
             res_dict = rec_result.model_dump()
             if rec_assumptions:
                 res_dict["assumptions"] = rec_assumptions
+            if hw_input:
+                res_dict["resolved_hardware"] = {
+                    "name": hw_input.name,
+                    "usable_memory_bytes": hw_input.memory_bytes - hw_input.reserved_memory_bytes,
+                    "profile_type": "preset" if hw_input.is_preset else "user_provided",
+                }
+
+            # Add formatted GiB figures for each recommendation candidate
+            for cand in res_dict.get("recommendations", []):
+                est = cand.get("estimate")
+                if est:
+                    res_hw = cand.get("resolved_hardware") or est.get("resolved_hardware") or {}
+                    usable_b = res_hw.get("usable_memory_bytes") or (
+                        hw_input.memory_bytes - hw_input.reserved_memory_bytes
+                    )
+                    cand["formatted_gib"] = _format_gib_dict(
+                        total_bytes=est.get("total_bytes", 0),
+                        headroom_bytes=est.get("headroom_bytes", 0),
+                        weights_bytes=est.get("weights_bytes", 0),
+                        kv_cache_bytes=est.get("kv_cache_bytes", 0),
+                        activation_bytes=est.get("activation_bytes", 0),
+                        runtime_overhead_bytes=est.get("runtime_overhead_bytes", 0),
+                        usable_memory_bytes=usable_b,
+                    )
             return res_dict
 
         else:
