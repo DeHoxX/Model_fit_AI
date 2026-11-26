@@ -94,3 +94,9 @@ ModelFit preserves the visual styling and component ergonomics:
 - **503 on `/api/v1/health/ready`**: The database is unreachable or taking longer than 2.0 seconds to respond. Check `DATABASE_URL` and ensure PostgreSQL is running.
 - **CORS Rejected on Startup**: In production mode (`APP_ENV=production`), `CORS_ORIGINS` must not contain `*`. Specify exact origin domains.
 - **Port Conflict**: If port 8000 or 3000 is occupied, set `PORT` in `.env` or pass `--port` when running servers.
+
+---
+
+## 7. License
+
+This project is licensed under the MIT License. See the LICENSE file for details.

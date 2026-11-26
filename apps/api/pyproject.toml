@@ -3,6 +3,7 @@ name = "modelfit"
 version = "1.0.0"
 description = "ModelFit: AI Model Discovery and Memory Estimation Platform API"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.11",
